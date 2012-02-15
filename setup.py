@@ -31,7 +31,7 @@ setup(
     url='http://github.com/LiiquOy/flask-generic-views',
     packages=['flask_generic_views'],
     include_package_data=True,
-    license='LGPL',
+    license='BSD',
     zip_safe=False,
     platforms='any',
     install_requires=[
