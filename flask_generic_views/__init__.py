@@ -2,11 +2,10 @@ import re
 from copy import copy
 from datetime import datetime, date, time
 from decimal import Decimal
-from flask import render_template, request, redirect, url_for, flash
+from flask import (render_template, request, redirect, url_for, flash,
+    current_app, jsonify)
 from flask.views import View
-from flask.ext.login import login_required
 from sqlalchemy import types
-from monitori.extensions import db
 
 
 first_cap_re = re.compile('(.)([A-Z][a-z]+)')
@@ -34,6 +33,14 @@ TYPE_MAP = {
 }
 
 
+def request_wants_json():
+    best = request.accept_mimetypes \
+        .best_match(['application/json', 'text/html'])
+    return best == 'application/json' and \
+        request.accept_mimetypes[best] > \
+        request.accept_mimetypes['text/html']
+
+
 def get_native_type(sqlalchemy_type):
     for base_type in TYPE_MAP:
         if isinstance(sqlalchemy_type, base_type):
@@ -48,6 +55,10 @@ class ModelView(View):
             self.model_class = model_class
         if not resource_name:
             self.resource_name = underscorize(self.model_class.__name__)
+
+    @property
+    def db(self):
+        return current_app.extensions['sqlalchemy'].db
 
 
 class ShowView(ModelView):
@@ -70,7 +81,10 @@ class ShowView(ModelView):
         else:
             context = self.context
 
-        return render_template(self.template, item=item, **context)
+        if request_wants_json():
+            return jsonify(data=item.as_json(**context))
+        else:
+            return render_template(self.template, item=item, **context)
 
 
 class FormView(ModelView):
@@ -98,8 +112,8 @@ class CreateFormView(FormView):
         form = self.form_class(formdata=request.form, obj=model)
         if form.validate_on_submit():
             form.populate_obj(model)
-            db.session.add(model)
-            db.session.commit()
+            self.db.session.add(model)
+            self.db.session.commit()
 
             flash(self.success_message, 'success')
             return redirect(url_for(self.success_redirect, id=model.id))
@@ -121,7 +135,7 @@ class UpdateFormView(FormView):
         form = self.form_class(obj=item, formdata=request.form)
         if form.validate_on_submit():
             form.populate_obj(item)
-            db.session.commit()
+            self.db.session.commit()
             flash(self.success_message, 'success')
 
             return redirect(url_for(self.success_redirect, id=item.id))
@@ -143,8 +157,8 @@ class DeleteView(ModelView):
 
     def dispatch_request(self, *args, **kwargs):
         item = self.model_class.query.get(kwargs.values()[0])
-        db.session.delete(item)
-        db.session.commit()
+        self.db.session.delete(item)
+        self.db.session.commit()
         flash(self.success_message, 'success')
         return redirect(url_for(self.success_redirect))
 
@@ -248,9 +262,9 @@ class SortedListView(ModelView):
             sign, order_by = order_by[0], order_by[1:]
 
         if sign == '+':
-            func = db.asc
+            func = self.db.asc
         else:
-            func = db.desc
+            func = self.db.desc
 
         for entity in entities:
             if order_by in entity.__table__.columns:
@@ -278,6 +292,27 @@ class SortedListView(ModelView):
         )
 
 
+#: Generates standard routes for given model
+#:
+#: index    GET     /resource/
+#: new      GET     /resource/new
+#: show     GET     /resource/<int:id>
+#: edit     GET     /resource/<int:id>/edit
+#: create   POST    /resource/
+#: update   PUT     /resource/<int:id>
+#: delete   DELETE  /resource/<int:id>
+#:
+#: Supports both natural and surrogate primary keys for models, however it
+#: does not yet support composite primary keys. Consider user model with name
+#: as primary key. The routes would then look like:
+#:
+#: index    GET     /users/
+#: new      GET     /users/new
+#: show     GET     /users/<name>
+#: edit     GET     /users/<name>/edit
+#: create   POST    /users/
+#: update   PUT     /users/<name>
+#: delete   DELETE  /users/<name>
 class ModelRouter(object):
     def __init__(self, model_class):
         self.model_class = model_class
@@ -320,9 +355,9 @@ class ModelRouter(object):
             route, view, kwargs = value
             blueprint.add_url_rule(
                 route,
-                view_func=login_required(view.as_view(
+                view_func=view.as_view(
                     key,
                     model_class=self.model_class,
                     **kwargs
-                ))
+                )
             )

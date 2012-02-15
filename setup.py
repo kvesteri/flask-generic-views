@@ -36,7 +36,8 @@ setup(
     platforms='any',
     install_requires=[
         'setuptools',
-        'Flask'
+        'Flask',
+        'Flask-SQLAlchemy'
     ],
     cmdclass={
         'test': PyTest
