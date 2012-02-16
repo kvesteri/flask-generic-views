@@ -36,3 +36,7 @@ class TestShowView(ViewTestCase):
         response = self.xhr_client.get('/users/1')
         assert response.status_code == 200
         assert response.json['data']['name'] == u'John Matrix'
+
+    def test_returns_404_if_not_found(self):
+        response = self.xhr_client.get('/users/123123')
+        assert response.status_code == 404

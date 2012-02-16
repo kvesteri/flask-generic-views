@@ -3,7 +3,7 @@ from copy import copy
 from datetime import datetime, date, time
 from decimal import Decimal
 from flask import (render_template, request, redirect, url_for, flash,
-    current_app, jsonify)
+    current_app, jsonify, Response, Blueprint)
 from flask.views import View
 from sqlalchemy import types
 
@@ -12,9 +12,54 @@ first_cap_re = re.compile('(.)([A-Z][a-z]+)')
 all_cap_re = re.compile('([a-z0-9])([A-Z])')
 
 
+#: convert a camelcased name to underscorized form, eg:
+#: CamelCase    ->  camel_case
+#: HTMLForm     ->  html_form
 def underscorize(name):
     s1 = first_cap_re.sub(r'\1_\2', name)
     return all_cap_re.sub(r'\1_\2', s1).lower()
+
+
+#: convert a camelcased name to hypnenized form, eg:
+#: CamelCase    ->  camel-case
+#: HTMLForm     ->  html-form
+def hypnenize(name):
+    s1 = first_cap_re.sub(r'\1-\2', name)
+    return all_cap_re.sub(r'\1-\2', s1).lower()
+
+
+# (pattern, search, replace) regex english plural rules tuple
+rule_tuple = (
+    ('[ml]ouse$', '([ml])ouse$', '\\1ice'),
+    ('child$', 'child$', 'children'),
+    ('booth$', 'booth$', 'booths'),
+    ('foot$', 'foot$', 'feet'),
+    ('ooth$', 'ooth$', 'eeth'),
+    ('l[eo]af$', 'l([eo])af$', 'l\\1aves'),
+    ('sis$', 'sis$', 'ses'),
+    ('man$', 'man$', 'men'),
+    ('ife$', 'ife$', 'ives'),
+    ('eau$', 'eau$', 'eaux'),
+    ('lf$', 'lf$', 'lves'),
+    ('[sxz]$', '$', 'es'),
+    ('[^aeioudgkprt]h$', '$', 'es'),
+    ('(qu|[^aeiou])y$', 'y$', 'ies'),
+    ('$', '$', 's')
+)
+
+
+def regex_rules(rules=rule_tuple):
+    for line in rules:
+        pattern, search, replace = line
+        yield lambda word: re.search(pattern, word) and \
+            re.sub(search, replace, word)
+
+
+def pluralize(noun):
+    for rule in regex_rules():
+        result = rule(noun)
+        if result:
+            return result
 
 
 TYPE_MAP = {
@@ -55,6 +100,8 @@ class ModelView(View):
             self.model_class = model_class
         if not resource_name:
             self.resource_name = underscorize(self.model_class.__name__)
+        else:
+            self.resource_name = resource_name
 
     @property
     def db(self):
@@ -97,7 +144,7 @@ class FormView(ModelView):
         self.success_redirect = '%s.show' % self.resource_name
 
 
-class CreateFormView(FormView):
+class NewFormView(FormView):
     def __init__(self, template=None, success_message=None, *args, **kwargs):
         FormView.__init__(self, *args, **kwargs)
         self.template = '%s/create.html' % self.resource_name
@@ -120,7 +167,7 @@ class CreateFormView(FormView):
         return render_template(self.template, form=form)
 
 
-class UpdateFormView(FormView):
+class EditFormView(FormView):
     def __init__(self, template=None, success_message=None, *args, **kwargs):
         FormView.__init__(self, *args, **kwargs)
         self.template = '%s/edit.html' % self.resource_name
@@ -142,6 +189,56 @@ class UpdateFormView(FormView):
         return render_template(self.template, item=item, form=form)
 
 
+class CreateView(ModelView):
+    methods = ['POST']
+
+    def __init__(self, success_redirect=None, success_message=None, *args,
+        **kwargs):
+        ModelView.__init__(self, *args, **kwargs)
+        self.success_redirect = '%s.index' % self.resource_name
+        if success_redirect:
+            self.success_redirect = success_redirect
+        self.success_message = '%s deleted.' % self.model_class.__name__
+        if success_message:
+            self.success_message = success_message
+
+    def dispatch_request(self, *args, **kwargs):
+        item = self.model_class.query.get(kwargs.values()[0])
+        self.db.session.delete(item)
+        self.db.session.commit()
+        flash(self.success_message, 'success')
+
+        if request_wants_json():
+            return Response(status=204)
+        else:
+            return redirect(url_for(self.success_redirect))
+
+
+class UpdateView(ModelView):
+    methods = ['PUT']
+
+    def __init__(self, success_redirect=None, success_message=None, *args,
+        **kwargs):
+        ModelView.__init__(self, *args, **kwargs)
+        self.success_redirect = '%s.index' % self.resource_name
+        if success_redirect:
+            self.success_redirect = success_redirect
+        self.success_message = '%s updated!' % self.model_class.__name__
+        if success_message:
+            self.success_message = success_message
+
+    def dispatch_request(self, *args, **kwargs):
+        item = self.model_class.query.get(kwargs.values()[0])
+        self.db.session.delete(item)
+        self.db.session.commit()
+
+        if request_wants_json():
+            return Response(status=204)
+        else:
+            flash(self.success_message, 'success')
+            return redirect(url_for(self.success_redirect))
+
+
 class DeleteView(ModelView):
     methods = ['DELETE']
 
@@ -160,7 +257,11 @@ class DeleteView(ModelView):
         self.db.session.delete(item)
         self.db.session.commit()
         flash(self.success_message, 'success')
-        return redirect(url_for(self.success_redirect))
+
+        if request_wants_json():
+            return Response(status=204)
+        else:
+            return redirect(url_for(self.success_redirect))
 
 
 class SortedListView(ModelView):
@@ -281,15 +382,18 @@ class SortedListView(ModelView):
         if 'orderby' in args:
             del args['orderby']
 
-        return render_template(
-            self.template,
-            items=items,
-            columns=self.columns,
-            form=form,
-            order_by=order_by,
-            order_sign=sign,
-            args=args
-        )
+        if request_wants_json():
+            return jsonify(data=[item.as_json() for item in items])
+        else:
+            return render_template(
+                self.template,
+                items=items,
+                columns=self.columns,
+                form=form,
+                order_by=order_by,
+                order_sign=sign,
+                args=args
+            )
 
 
 #: Generates standard routes for given model
@@ -303,8 +407,11 @@ class SortedListView(ModelView):
 #: delete   DELETE  /resource/<int:id>
 #:
 #: Supports both natural and surrogate primary keys for models, however it
-#: does not yet support composite primary keys. Consider user model with name
-#: as primary key. The routes would then look like:
+#: does not yet support composite primary keys.
+#:
+#: Example 1: User model with name string as primary key
+#:
+#: The routes would then look like:
 #:
 #: index    GET     /users/
 #: new      GET     /users/new
@@ -330,8 +437,10 @@ class ModelRouter(object):
 
         self.routes = {
             'index': ['', SortedListView, {}],
-            'create': ['/create', CreateFormView, {}],
-            'edit': ['/{primary_key}/edit', UpdateFormView, {}],
+            'create': ['/create', CreateView, {}],
+            'edit': ['/{primary_key}/edit', EditFormView, {}],
+            'new': ['/new', NewFormView, {}],
+            'update': ['/{primary_key}', UpdateView, {}],
             'delete': ['/{primary_key}', DeleteView, {}],
             'show': ['/{primary_key}', ShowView, {}]
         }
@@ -350,7 +459,11 @@ class ModelRouter(object):
     def bind_route(self, key, route):
         self.routes[key][0] = route
 
-    def register(self, blueprint):
+    def register(self, blueprint=None):
+        if not blueprint:
+            blueprint = Blueprint(underscorize(self.model.__class__),
+                __name__)
+
         for key, value in self.routes.items():
             route, view, kwargs = value
             blueprint.add_url_rule(
