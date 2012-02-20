@@ -205,6 +205,7 @@ class UpdateFormView(FormView):
         if form.validate_on_submit():
             form.populate_obj(item)
             self.db.session.commit()
+            flash(self.success_message, 'success')
             return redirect(url_for(self.success_redirect, id=item.id))
         return render_template(self.template, item=item, form=form)
 
