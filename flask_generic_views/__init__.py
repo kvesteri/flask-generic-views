@@ -78,6 +78,7 @@ TYPE_MAP = {
 }
 
 
+#: Whether or not the request wants the response in json format
 def request_wants_json():
     best = request.accept_mimetypes \
         .best_match(['application/json', 'text/html'])
@@ -86,6 +87,7 @@ def request_wants_json():
         request.accept_mimetypes['text/html']
 
 
+#: Converts sqlalchemy type into python type
 def get_native_type(sqlalchemy_type):
     for base_type in TYPE_MAP:
         if isinstance(sqlalchemy_type, base_type):
@@ -107,7 +109,25 @@ class ModelView(View):
     def db(self):
         return current_app.extensions['sqlalchemy'].db
 
+    @property
+    def request_params(self):
+        if request.is_xhr:
+            data = {}
+            if request.data:
+                data = request.json
+        else:
+            data = request.form.to_dict()
 
+        if hasattr(self, 'validator') and self.validator:
+            data = self.validator(data)
+        return data
+
+
+#: Generic show view
+#:
+#: On text/html request returns html template with requested item
+#:
+#: On json request returns requested item in json format
 class ShowView(ModelView):
     def __init__(self, template=None, context={}, *args, **kwargs):
         ModelView.__init__(self, *args, **kwargs)
@@ -135,8 +155,6 @@ class ShowView(ModelView):
 
 
 class FormView(ModelView):
-    methods = ['GET', 'POST']
-
     def __init__(self, form_class=None, *args, **kwargs):
         ModelView.__init__(self, *args, **kwargs)
         if form_class:
@@ -144,7 +162,9 @@ class FormView(ModelView):
         self.success_redirect = '%s.show' % self.resource_name
 
 
-class NewFormView(FormView):
+class CreateFormView(FormView):
+    methods = ['GET', 'POST']
+
     def __init__(self, template=None, success_message=None, *args, **kwargs):
         FormView.__init__(self, *args, **kwargs)
         self.template = '%s/create.html' % self.resource_name
@@ -155,19 +175,21 @@ class NewFormView(FormView):
             self.success_message = success_message
 
     def dispatch_request(self):
-        model = self.model_class()
-        form = self.form_class(formdata=request.form, obj=model)
-        if form.validate_on_submit():
-            form.populate_obj(model)
+        if request.method == 'POST':
+            model = self.model_class()
+            for field, value in self.request_params.items():
+                setattr(model, field, value)
             self.db.session.add(model)
             self.db.session.commit()
 
             flash(self.success_message, 'success')
             return redirect(url_for(self.success_redirect, id=model.id))
-        return render_template(self.template, form=form)
+        return render_template(self.template)
 
 
-class EditFormView(FormView):
+class UpdateFormView(FormView):
+    methods = ['GET', 'PUT']
+
     def __init__(self, template=None, success_message=None, *args, **kwargs):
         FormView.__init__(self, *args, **kwargs)
         self.template = '%s/edit.html' % self.resource_name
@@ -179,14 +201,12 @@ class EditFormView(FormView):
 
     def dispatch_request(self, *args, **kwargs):
         item = self.model_class.query.get_or_404(kwargs.values()[0])
-        form = self.form_class(obj=item, formdata=request.form)
-        if form.validate_on_submit():
-            form.populate_obj(item)
+        if request.method == 'PUT':
+            for field, value in self.request_params.items():
+                setattr(item, field, value)
             self.db.session.commit()
-            flash(self.success_message, 'success')
-
             return redirect(url_for(self.success_redirect, id=item.id))
-        return render_template(self.template, item=item, form=form)
+        return render_template(self.template, item=item)
 
 
 class CreateView(ModelView):
@@ -198,26 +218,34 @@ class CreateView(ModelView):
         self.success_redirect = '%s.index' % self.resource_name
         if success_redirect:
             self.success_redirect = success_redirect
-        self.success_message = '%s deleted.' % self.model_class.__name__
+        self.success_message = '%s created!' % self.model_class.__name__
         if success_message:
             self.success_message = success_message
 
     def dispatch_request(self, *args, **kwargs):
-        item = self.model_class.query.get(kwargs.values()[0])
-        self.db.session.delete(item)
+        item = self.model_class()
+        for field, value in self.request_params.items():
+            setattr(item, field, value)
+        self.db.session.add(item)
         self.db.session.commit()
-        flash(self.success_message, 'success')
 
         if request_wants_json():
-            return Response(status=204)
+            response = jsonify(data=item.as_json())
+            response.status_code = 201
+            return response
         else:
+            flash(self.success_message, 'success')
             return redirect(url_for(self.success_redirect))
 
 
 class UpdateView(ModelView):
     methods = ['PUT']
 
-    def __init__(self, success_redirect=None, success_message=None, *args,
+    def __init__(self,
+        success_redirect=None,
+        validator=None,
+        success_message=None,
+        *args,
         **kwargs):
         ModelView.__init__(self, *args, **kwargs)
         self.success_redirect = '%s.index' % self.resource_name
@@ -226,14 +254,19 @@ class UpdateView(ModelView):
         self.success_message = '%s updated!' % self.model_class.__name__
         if success_message:
             self.success_message = success_message
+        if validator:
+            self.validator = validator
+        else:
+            self.validator = lambda a: a
 
     def dispatch_request(self, *args, **kwargs):
-        item = self.model_class.query.get(kwargs.values()[0])
-        self.db.session.delete(item)
+        item = self.model_class.query.get_or_404(kwargs.values()[0])
+        for field, value in self.request_params.items():
+            setattr(item, field, value)
         self.db.session.commit()
 
         if request_wants_json():
-            return Response(status=204)
+            return jsonify(data=item.as_json())
         else:
             flash(self.success_message, 'success')
             return redirect(url_for(self.success_redirect))
@@ -398,13 +431,13 @@ class SortedListView(ModelView):
 
 #: Generates standard routes for given model
 #:
-#: index    GET     /resource/
-#: new      GET     /resource/new
-#: show     GET     /resource/<int:id>
-#: edit     GET     /resource/<int:id>/edit
-#: create   POST    /resource/
-#: update   PUT     /resource/<int:id>
-#: delete   DELETE  /resource/<int:id>
+#: index    GET     /
+#: new      GET     /new
+#: show     GET     /<int:id>
+#: edit     GET     /<int:id>/edit
+#: create   POST    /
+#: update   PUT     /<int:id>
+#: delete   DELETE  /<int:id>
 #:
 #: Supports both natural and surrogate primary keys for models, however it
 #: does not yet support composite primary keys.
@@ -413,15 +446,15 @@ class SortedListView(ModelView):
 #:
 #: The routes would then look like:
 #:
-#: index    GET     /users/
-#: new      GET     /users/new
-#: show     GET     /users/<name>
-#: edit     GET     /users/<name>/edit
-#: create   POST    /users/
-#: update   PUT     /users/<name>
-#: delete   DELETE  /users/<name>
+#: index    GET     /
+#: new      GET     /new
+#: show     GET     /<name>
+#: edit     GET     /<name>/edit
+#: create   POST    /
+#: update   PUT     /<name>
+#: delete   DELETE  /<name>
 class ModelRouter(object):
-    def __init__(self, model_class):
+    def __init__(self, model_class, decorators=[]):
         self.model_class = model_class
         primary_key = self.model_class.__table__.primary_key.columns
         if len(primary_key.keys()) > 1:
@@ -435,11 +468,13 @@ class ModelRouter(object):
         else:
             self.route_key = '<%s>' % name
 
+        self.decorators = decorators
+
         self.routes = {
             'index': ['', SortedListView, {}],
             'create': ['/create', CreateView, {}],
-            'edit': ['/{primary_key}/edit', EditFormView, {}],
-            'new': ['/new', NewFormView, {}],
+            'edit': ['/{primary_key}/edit', UpdateFormView, {}],
+            'new': ['/new', CreateFormView, {}],
             'update': ['/{primary_key}', UpdateView, {}],
             'delete': ['/{primary_key}', DeleteView, {}],
             'show': ['/{primary_key}', ShowView, {}]
@@ -461,16 +496,22 @@ class ModelRouter(object):
 
     def register(self, blueprint=None):
         if not blueprint:
-            blueprint = Blueprint(underscorize(self.model.__class__),
+            blueprint = Blueprint(underscorize(self.model_class.__name__),
                 __name__)
 
         for key, value in self.routes.items():
             route, view, kwargs = value
+            view_func = view.as_view(
+                key,
+                model_class=self.model_class,
+                **kwargs
+            )
+
+            for decorator in self.decorators:
+                view_func = decorator(view_func)
+
             blueprint.add_url_rule(
                 route,
-                view_func=view.as_view(
-                    key,
-                    model_class=self.model_class,
-                    **kwargs
-                )
+                view_func=view_func
             )
+        return blueprint
