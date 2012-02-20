@@ -175,9 +175,9 @@ class CreateFormView(FormView):
             self.success_message = success_message
 
     def dispatch_request(self):
-        form = self.form_class(request.form)
+        model = self.model_class()
+        form = self.form_class(request.form, obj=model)
         if form.validate_on_submit():
-            model = self.model_class()
             form.populate_obj(model)
             self.db.session.add(model)
             self.db.session.commit()
@@ -472,7 +472,7 @@ class ModelRouter(object):
 
         self.routes = {
             'index': ['', SortedListView, {}],
-            'create': ['/create', CreateView, {}],
+            'create': ['', CreateView, {}],
             'edit': ['/{primary_key}/edit', UpdateFormView, {}],
             'new': ['/new', CreateFormView, {}],
             'update': ['/{primary_key}', UpdateView, {}],
