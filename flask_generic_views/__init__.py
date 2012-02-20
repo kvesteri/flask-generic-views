@@ -175,20 +175,20 @@ class CreateFormView(FormView):
             self.success_message = success_message
 
     def dispatch_request(self):
-        if request.method == 'POST':
+        form = self.form_class(request.form)
+        if form.validate_on_submit():
             model = self.model_class()
-            for field, value in self.request_params.items():
-                setattr(model, field, value)
+            form.populate_obj(model)
             self.db.session.add(model)
             self.db.session.commit()
 
             flash(self.success_message, 'success')
             return redirect(url_for(self.success_redirect, id=model.id))
-        return render_template(self.template)
+        return render_template(self.template, form=form)
 
 
 class UpdateFormView(FormView):
-    methods = ['GET', 'PUT']
+    methods = ['GET', 'POST', 'PUT']
 
     def __init__(self, template=None, success_message=None, *args, **kwargs):
         FormView.__init__(self, *args, **kwargs)
@@ -201,12 +201,12 @@ class UpdateFormView(FormView):
 
     def dispatch_request(self, *args, **kwargs):
         item = self.model_class.query.get_or_404(kwargs.values()[0])
-        if request.method == 'PUT':
-            for field, value in self.request_params.items():
-                setattr(item, field, value)
+        form = self.form_class(request.form, obj=item)
+        if form.validate_on_submit():
+            form.populate_obj(item)
             self.db.session.commit()
             return redirect(url_for(self.success_redirect, id=item.id))
-        return render_template(self.template, item=item)
+        return render_template(self.template, item=item, form=form)
 
 
 class CreateView(ModelView):

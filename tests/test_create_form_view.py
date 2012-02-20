@@ -1,5 +1,6 @@
 from tests import ViewTestCase
 from .models import User
+from .mocks import MockForm
 from flask_generic_views import CreateFormView, ShowView
 
 
@@ -10,7 +11,7 @@ class TestCreateFormView(ViewTestCase):
         self.app.add_url_rule('/users/new',
             view_func=CreateFormView.as_view('edit',
             model_class=User,
-            validator=lambda a: a),
+            form_class=MockForm),
         )
         self.app.add_url_rule('/users',
             view_func=ShowView.as_view('user.show', model_class=User)

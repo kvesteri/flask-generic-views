@@ -1,6 +1,7 @@
 from tests import ViewTestCase
 from .extensions import db
 from .models import User
+from .mocks import MockForm
 from flask_generic_views import UpdateFormView, ShowView
 
 
@@ -11,7 +12,7 @@ class TestUpdateFormView(ViewTestCase):
         self.app.add_url_rule('/users/<int:id>/edit',
             view_func=UpdateFormView.as_view('edit',
             model_class=User,
-            validator=lambda a: a),
+            form_class=MockForm),
         )
         self.app.add_url_rule('/user/<int:id>',
             view_func=ShowView.as_view('user.show', model_class=User)
@@ -21,7 +22,7 @@ class TestUpdateFormView(ViewTestCase):
         db.session.commit()
 
     def test_returns_404_if_not_found(self):
-        response = self.xhr_client.put('/users/123123/edit')
+        response = self.client.put('/users/123123/edit')
         assert response.status_code == 404
 
     def test_renders_template_on_get_request(self):
