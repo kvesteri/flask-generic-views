@@ -23,7 +23,7 @@ class PyTest(Command):
 
 setup(
     name='Flask-GenericViews',
-    version='0.1.4',
+    version='0.1.5',
     description='Generic Views for Flask',
     long_description=__doc__,
     author='Konsta Vesterinen',
