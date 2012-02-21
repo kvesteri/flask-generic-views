@@ -308,6 +308,8 @@ class SortedListView(ModelView):
         *args, **kwargs):
         ModelView.__init__(self, *args, **kwargs)
 
+        self.last_query = None
+
         if not hasattr(self, 'form_class'):
             if form_class:
                 self.form_class = form_class
@@ -381,6 +383,8 @@ class SortedListView(ModelView):
                     query = query.filter(attr == True)
                 elif request.args[name] == 'n':
                     query = query.filter(attr == False)
+            elif native_type is int:
+                query = query.filter(attr == request.args[name])
         return query
 
     def dispatch_request(self):
@@ -408,6 +412,7 @@ class SortedListView(ModelView):
 
         items = self.execute_query(query)
 
+        self.last_query = query
         form = None
         if hasattr(self, 'form_class') and self.form_class:
             form = self.form_class(request.args)
@@ -516,3 +521,4 @@ class ModelRouter(object):
                 view_func=view_func
             )
         return blueprint
+
