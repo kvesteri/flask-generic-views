@@ -375,16 +375,21 @@ class SortedListView(ModelView):
                 continue
 
             native_type = get_native_type(column.type)
-
+            value = request.args[name]
             if native_type in (str, unicode):
-                query = query.filter(attr.startswith(request.args[name]))
+                query = query.filter(attr.startswith(value))
             elif native_type is bool:
-                if request.args[name] == 'y':
+                if value == 'y':
                     query = query.filter(attr == True)
-                elif request.args[name] == 'n':
+                elif value == 'n':
                     query = query.filter(attr == False)
             elif native_type is int:
-                query = query.filter(attr == request.args[name])
+                if value != '' and value != '__None':
+                    try:
+                        value = int(value)
+                        query = query.filter(attr == value)
+                    except ValueError:
+                        pass
         return query
 
     def dispatch_request(self):

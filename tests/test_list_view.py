@@ -28,3 +28,7 @@ class TestListView(ViewTestCase):
     def test_supports_integer_filters(self):
         response = self.xhr_client.get('/users?age=13')
         assert response.json['data'] == []
+
+    def test_integer_filter_supports_empty_strings(self):
+        response = self.xhr_client.get('/users?age=')
+        assert len(response.json['data']) == 1
