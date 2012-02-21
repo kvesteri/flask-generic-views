@@ -47,6 +47,10 @@ class TestListView(ViewTestCase):
         response = self.xhr_client.get('/users?page=1&per_page=2')
         assert len(response.json['data']) == 2
 
+    def test_supports_paging_out_of_item_range(self):
+        response = self.xhr_client.get('/users?page=10')
+        assert response.status_code == 404
+
     def test_page_parameter(self):
         response = self.xhr_client.get('/users?page=2&per_page=1&name=J')
         assert len(response.json['data']) == 1

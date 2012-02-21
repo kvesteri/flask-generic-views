@@ -6,6 +6,18 @@ from flask import (render_template, request, redirect, url_for, flash,
     current_app, jsonify, Response, Blueprint)
 from flask.views import View
 from sqlalchemy import types
+from werkzeug.datastructures import MultiDict
+
+
+def qp_url_for(endpoint, **kwargs):
+    data = dict(MultiDict(request.args).lists())
+
+    for key, value in kwargs.items():
+        if key in data:
+            data[key].append(value)
+        else:
+            data[key] = value
+    return url_for(endpoint, **data)
 
 
 first_cap_re = re.compile('(.)([A-Z][a-z]+)')
@@ -424,6 +436,7 @@ class SortedListView(ModelView):
             per_page = int(request.args.get('per_page', 20))
         except ValueError:
             per_page = 20
+
         pagination = query.paginate(page, per_page)
         items = self.execute_query(pagination)
 
