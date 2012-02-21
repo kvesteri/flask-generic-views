@@ -351,8 +351,8 @@ class SortedListView(ModelView):
     def column_to_alias(self, column):
         return ' '.join([s.capitalize() for s in column.split('_')])
 
-    def execute_query(self, query):
-        return query.all()
+    def execute_query(self, pagination):
+        return pagination.items
 
     def entity_column(self, column):
         entities = [entity.entity_zero.class_ for entity in \
@@ -415,7 +415,17 @@ class SortedListView(ModelView):
                 query = query.order_by(func(getattr(entity, order_by)))
                 break
 
-        items = self.execute_query(query)
+        try:
+            page = int(request.args.get('page', 1))
+        except ValueError:
+            page = 1
+
+        try:
+            per_page = int(request.args.get('per_page', 20))
+        except ValueError:
+            per_page = 20
+        pagination = query.paginate(page, per_page)
+        items = self.execute_query(pagination)
 
         self.last_query = query
         form = None
@@ -427,7 +437,15 @@ class SortedListView(ModelView):
             del args['orderby']
 
         if request_wants_json():
-            return jsonify(data=[item.as_json() for item in items])
+            return jsonify(
+                pagination={
+                    'page': pagination.page,
+                    'pages': pagination.pages,
+                    'per_page': pagination.per_page,
+                    'total': pagination.total
+                    },
+                data=[item.as_json() for item in items]
+            )
         else:
             return render_template(
                 self.template,
@@ -436,7 +454,11 @@ class SortedListView(ModelView):
                 form=form,
                 order_by=order_by,
                 order_sign=sign,
-                args=args
+                args=args,
+                per_page=per_page,
+                page=page,
+                total_items=pagination.total,
+                pages=pagination.pages
             )
 
 
