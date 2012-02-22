@@ -314,6 +314,8 @@ class SortedListView(ModelView):
         query=None,
         template=None,
         form_class=None,
+        per_page=20,
+        sort=None,
         *args, **kwargs):
         ModelView.__init__(self, *args, **kwargs)
 
@@ -340,6 +342,9 @@ class SortedListView(ModelView):
                 self.columns = columns
             else:
                 self.columns = self.default_columns()
+
+        self.per_page = per_page
+        self.sort = sort
 
         if not hasattr(self, 'template'):
             if template:
@@ -401,13 +406,27 @@ class SortedListView(ModelView):
                         pass
         return query
 
+    def append_pagination(self, query):
+        try:
+            page = int(request.args.get('page', 1))
+        except ValueError:
+            page = 1
+
+        try:
+            per_page = int(request.args.get('per_page', self.per_page))
+        except ValueError:
+            per_page = self.per_page
+
+        pagination = query.paginate(page, per_page)
+        return pagination
+
     def dispatch_request(self):
         query = self.query
         entities = [entity.entity_zero.class_ for entity in \
             query._entities]
         query = self.append_filters(query)
 
-        order_by = request.args.get('orderby', '+name')
+        order_by = request.args.get('orderby', '')
         if len(order_by) <= 1:
             sign = '+'
             order_by = 'name'
@@ -424,27 +443,13 @@ class SortedListView(ModelView):
                 query = query.order_by(func(getattr(entity, order_by)))
                 break
 
-        try:
-            page = int(request.args.get('page', 1))
-        except ValueError:
-            page = 1
-
-        try:
-            per_page = int(request.args.get('per_page', 20))
-        except ValueError:
-            per_page = 20
-
-        pagination = query.paginate(page, per_page)
+        pagination = self.append_pagination(query)
         items = self.execute_query(pagination)
 
         self.last_query = query
         form = None
         if hasattr(self, 'form_class') and self.form_class:
             form = self.form_class(request.args)
-
-        args = copy(request.args.to_dict())
-        if 'orderby' in args:
-            del args['orderby']
 
         if request_wants_json():
             return jsonify(
@@ -454,6 +459,7 @@ class SortedListView(ModelView):
                     'per_page': pagination.per_page,
                     'total': pagination.total
                     },
+                sort=self.sort,
                 data=[item.as_json() for item in items]
             )
         else:
@@ -464,12 +470,10 @@ class SortedListView(ModelView):
                 form=form,
                 order_by=order_by,
                 order_sign=sign,
-                args=args,
-                per_page=per_page,
-                page=page,
+                per_page=pagination.per_page,
+                page=pagination.page,
                 total_items=pagination.total,
-                pages=pagination.pages,
-                qp_url_for=qp_url_for
+                pages=pagination.pages
             )
 
 
@@ -559,4 +563,3 @@ class ModelRouter(object):
                 view_func=view_func
             )
         return blueprint
-

@@ -54,3 +54,21 @@ class TestListView(ViewTestCase):
     def test_page_parameter(self):
         response = self.xhr_client.get('/users?page=2&per_page=1&name=J')
         assert len(response.json['data']) == 1
+
+    def test_per_page_default_can_be_overridden(self):
+        self.view = SortedListView.as_view('index', model_class=User,
+            per_page=3)
+        self.app.add_url_rule('/users',
+            view_func=self.view,
+        )
+        response = self.xhr_client.get('/users')
+        assert len(response.json['data']) == 3
+
+    def test_sort_default_can_be_overridden(self):
+        self.view = SortedListView.as_view('index', model_class=User,
+            sort='age')
+        self.app.add_url_rule('/users',
+            view_func=self.view,
+        )
+        response = self.xhr_client.get('/users')
+        assert response.json['sort'] == 'age'
