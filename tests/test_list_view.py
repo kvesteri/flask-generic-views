@@ -1,10 +1,12 @@
+from pytest import raises
 from tests import ViewTestCase
 from .extensions import db
 from .models import User
+from flask.templating import TemplateNotFound
 from flask_generic_views import SortedListView
 
 
-class TestListView(ViewTestCase):
+class ListViewTestCase(ViewTestCase):
     def setup_method(self, method):
         ViewTestCase.setup_method(self, method)
         self.view = SortedListView.as_view('index', model_class=User)
@@ -22,9 +24,20 @@ class TestListView(ViewTestCase):
         db.session.add(vader)
         db.session.commit()
 
+
+class TestListView(ListViewTestCase):
     def test_if_template_not_set_tries_to_use_default_template(self):
         response = self.client.get('/users')
         response.status_code == 200
+
+    def test_template_can_be_overridden(self):
+        self.view = SortedListView.as_view('index', model_class=User,
+            template='some_template.html')
+        self.app.add_url_rule('/users',
+            view_func=self.view,
+        )
+        with raises(TemplateNotFound):
+            self.client.get('/users')
 
     def test_supports_json(self):
         response = self.xhr_client.get('/users?name=John')
@@ -64,6 +77,8 @@ class TestListView(ViewTestCase):
         response = self.xhr_client.get('/users')
         assert len(response.json['data']) == 3
 
+
+class TestListViewSorting(ListViewTestCase):
     def test_sort_default_can_be_overridden(self):
         self.view = SortedListView.as_view('index', model_class=User,
             sort='age')

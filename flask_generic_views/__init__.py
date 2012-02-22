@@ -1,5 +1,4 @@
 import re
-from copy import copy
 from datetime import datetime, date, time
 from decimal import Decimal
 from flask import (render_template, request, redirect, url_for, flash,
@@ -141,14 +140,12 @@ class ShowView(ModelView):
     def __init__(self, template=None, context={}, *args, **kwargs):
         ModelView.__init__(self, *args, **kwargs)
 
-        if not hasattr(self, 'context'):
-            self.context = context
+        self.context = context
 
-        if not hasattr(self, 'template'):
-            if template:
-                self.template = template
-            else:
-                self.template = '%s/show.html' % self.resource_name
+        if template:
+            self.template = template
+        else:
+            self.template = '%s/show.html' % self.resource_name
 
     def dispatch_request(self, *args, **kwargs):
         item = self.model_class.query.get_or_404(kwargs.values()[0])
@@ -321,36 +318,31 @@ class SortedListView(ModelView):
 
         self.last_query = None
 
-        if not hasattr(self, 'form_class'):
-            if form_class:
-                self.form_class = form_class
+        if form_class:
+            self.form_class = form_class
 
-        if not hasattr(self, 'query'):
-            if query:
-                self.query = query
-            else:
-                self.query = self.model_class.query
+        if query:
+            self.query = query
+        else:
+            self.query = self.model_class.query
 
-        if not hasattr(self, 'query_field_names'):
-            if query_field_names:
-                self.query_field_names = query_field_names
-            else:
-                self.query_field_names = self.default_query_field_names()
+        if query_field_names:
+            self.query_field_names = query_field_names
+        else:
+            self.query_field_names = self.default_query_field_names()
 
-        if not hasattr(self, 'columns'):
-            if columns:
-                self.columns = columns
-            else:
-                self.columns = self.default_columns()
+        if columns:
+            self.columns = columns
+        else:
+            self.columns = self.default_columns()
 
         self.per_page = per_page
         self.sort = sort
 
-        if not hasattr(self, 'template'):
-            if template:
-                self.template = template
-            else:
-                self.template = '%s/index.html' % self.resource_name
+        if template:
+            self.template = template
+        else:
+            self.template = '%s/index.html' % self.resource_name
 
     def default_query_field_names(self):
         return self.query._entities[0].entity_zero.class_.__table__ \
