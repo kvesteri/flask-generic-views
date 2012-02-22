@@ -315,7 +315,7 @@ class SortedListView(ModelView):
         template=None,
         form_class=None,
         per_page=20,
-        sort=None,
+        sort='',
         *args, **kwargs):
         ModelView.__init__(self, *args, **kwargs)
 
@@ -428,19 +428,21 @@ class SortedListView(ModelView):
 
         sort = request.args.get('sort', '')
         if not sort:
-            sort = 'name'
+            sort = self.sort
 
-        if sort[0] == '-':
-            func = self.db.desc
-            order_by = sort[1:]
-        else:
-            func = self.db.asc
-            order_by = sort
+        order_by = sort
+        if sort:
+            if sort[0] == '-':
+                func = self.db.desc
+                order_by = sort[1:]
+            else:
+                func = self.db.asc
 
-        for entity in entities:
-            if order_by in entity.__table__.columns:
-                query = query.order_by(func(getattr(entity, order_by)))
-                break
+        if order_by:
+            for entity in entities:
+                if order_by in entity.__table__.columns:
+                    query = query.order_by(func(getattr(entity, order_by)))
+                    break
 
         pagination = self.append_pagination(query)
         items = self.execute_query(pagination)

@@ -15,7 +15,7 @@ class TestListView(ViewTestCase):
         john = User(name=u'John Matrix', age=35)
         jack = User(name=u'Jack Daniels', age=60)
         luke = User(name=u'Luke Skywalker', age=30)
-        vader = User(name=u'Darth Vadeer', age=55)
+        vader = User(name=u'Darth Vader', age=55)
         db.session.add(john)
         db.session.add(jack)
         db.session.add(luke)
@@ -72,3 +72,25 @@ class TestListView(ViewTestCase):
         )
         response = self.xhr_client.get('/users')
         assert response.json['sort'] == 'age'
+
+    def test_ascending_default_sort(self):
+        self.view = SortedListView.as_view('index', model_class=User,
+            sort='name')
+        self.app.add_url_rule('/users',
+            view_func=self.view,
+        )
+        response = self.xhr_client.get('/users')
+        data = response.json['data']
+        assert data[0]['name'] == 'Darth Vader'
+        assert data[1]['name'] == 'Jack Daniels'
+
+    def test_descending_default_sort(self):
+        self.view = SortedListView.as_view('index', model_class=User,
+            sort='-name')
+        self.app.add_url_rule('/users',
+            view_func=self.view,
+        )
+        response = self.xhr_client.get('/users')
+        data = response.json['data']
+        assert data[0]['name'] == 'Luke Skywalker'
+        assert data[1]['name'] == 'John Matrix'
