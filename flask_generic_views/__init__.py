@@ -13,10 +13,7 @@ def qp_url_for(endpoint, **kwargs):
     data = dict(MultiDict(request.args).lists())
 
     for key, value in kwargs.items():
-        if key in data:
-            data[key].append(value)
-        else:
-            data[key] = value
+        data[key] = value
     return url_for(endpoint, **data)
 
 
@@ -471,7 +468,8 @@ class SortedListView(ModelView):
                 per_page=per_page,
                 page=page,
                 total_items=pagination.total,
-                pages=pagination.pages
+                pages=pagination.pages,
+                qp_url_for=qp_url_for
             )
 
 
