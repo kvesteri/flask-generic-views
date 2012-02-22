@@ -426,17 +426,16 @@ class SortedListView(ModelView):
             query._entities]
         query = self.append_filters(query)
 
-        order_by = request.args.get('orderby', '')
-        if len(order_by) <= 1:
-            sign = '+'
-            order_by = 'name'
-        else:
-            sign, order_by = order_by[0], order_by[1:]
+        sort = request.args.get('sort', '')
+        if not sort:
+            sort = 'name'
 
-        if sign == '+':
-            func = self.db.asc
-        else:
+        if sort[0] == '-':
             func = self.db.desc
+            order_by = sort[1:]
+        else:
+            func = self.db.asc
+            order_by = sort
 
         for entity in entities:
             if order_by in entity.__table__.columns:
@@ -468,8 +467,7 @@ class SortedListView(ModelView):
                 items=items,
                 columns=self.columns,
                 form=form,
-                order_by=order_by,
-                order_sign=sign,
+                sort=sort,
                 per_page=pagination.per_page,
                 page=pagination.page,
                 total_items=pagination.total,
