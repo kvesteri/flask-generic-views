@@ -132,11 +132,11 @@ class ShowView(TemplateView):
 
     def dispatch_request(self, *args, **kwargs):
         item = self.model_class.query.get_or_404(kwargs.values()[0])
-
+        context = self.get_context(item=item)
         if request_wants_json():
-            return jsonify(data=item.as_json(**self.get_context()))
+            return jsonify(data=item.as_json())
         else:
-            return render_template(self.template, **self.get_context())
+            return render_template(self.template, **context)
 
 
 class FormView(TemplateView):
@@ -183,7 +183,7 @@ class CreateFormView(FormView):
 
             flash(self.success_message, 'success')
             return redirect(url_for(self.success_redirect, id=model.id))
-        return render_template(self.template, form=form)
+        return render_template(self.template, form=form, item=model)
 
 
 class UpdateFormView(FormView):
@@ -386,8 +386,7 @@ class SortedListView(ListView):
         **kwargs):
         ListView.__init__(self, *args, **kwargs)
 
-        if form_class:
-            self.form_class = form_class
+        self.form_class = form_class
 
         self.per_page = per_page
         self.sort = sort
