@@ -35,9 +35,12 @@ setup(
     zip_safe=False,
     platforms='any',
     install_requires=[
-        'setuptools',
         'Flask',
-        'Flask-SQLAlchemy'
+        'Flask-SQLAlchemy',
+        'inflection'
+    ],
+    dependency_links=[
+        'https://github.com/jpvanhal/inflection/zipball/master#egg=inflection-0.1.0'
     ],
     cmdclass={
         'test': PyTest
