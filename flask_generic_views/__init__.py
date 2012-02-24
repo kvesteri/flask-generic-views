@@ -461,6 +461,10 @@ class SortedListView(ListView):
         pagination = self.append_pagination(query)
         items = self.execute_query(pagination)
 
+        form = None
+        if self.form_class:
+            form = self.form_class()
+
         if request_wants_json():
             return jsonify(
                 pagination={
@@ -481,7 +485,8 @@ class SortedListView(ListView):
                 per_page=pagination.per_page,
                 page=pagination.page,
                 total_items=pagination.total,
-                pages=pagination.pages
+                pages=pagination.pages,
+                form=form
             )
 
 
