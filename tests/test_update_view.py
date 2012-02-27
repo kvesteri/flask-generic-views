@@ -13,7 +13,7 @@ class TestUpdateView(ViewTestCase):
             model_class=User,
             validator=lambda a: a),
         )
-        self.app.add_url_rule('/users',
+        self.app.add_url_rule('/users/<int:id>',
             view_func=ShowView.as_view('user.show', model_class=User)
         )
         user = User(name=u'John Matrix')
@@ -36,9 +36,17 @@ class TestUpdateView(ViewTestCase):
             data={'name': u'Jack Daniels'}
         )
         assert response.status_code == 302
+        assert response.location == 'http://localhost/users/1'
 
     def test_updates_database(self):
         self.client.put('/users/1',
             data={'name': u'Jack Daniels'}
         )
         assert User.query.get(1).name == u'Jack Daniels'
+
+    def test_has_flash_message_default(self):
+        response = self.client.put('/users/1',
+            data={'name': u'Jack Daniels'}
+        )
+        response = self.client.get('/users/1')
+        assert 'User updated!' in response.data

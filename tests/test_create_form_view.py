@@ -13,7 +13,7 @@ class TestCreateFormView(ViewTestCase):
             model_class=User,
             form_class=MockForm),
         )
-        self.app.add_url_rule('/users',
+        self.app.add_url_rule('/users/<int:id>',
             view_func=ShowView.as_view('user.show', model_class=User)
         )
 

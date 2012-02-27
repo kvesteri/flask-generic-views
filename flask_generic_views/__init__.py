@@ -1,14 +1,23 @@
+from copy import copy
 from datetime import datetime, date, time
 from decimal import Decimal
 from flask import (render_template, request, redirect, url_for, flash,
     current_app, jsonify, Response, Blueprint)
 from flask.views import View
-from inflection import underscore
+from inflection import underscore, humanize
 from sqlalchemy import types
 from werkzeug.datastructures import MultiDict
 
 
 def qp_url_for(endpoint, **kwargs):
+    """
+    Returns the url for an endpoint but preserves all request query parameters
+
+    kwargs can be used for overriding specific query parameters
+
+    :param endpoint: endpoint to return the url for, eg. user.index
+    :param kwargs: dict containing query parameter names as keys
+    """
     data = dict(MultiDict(request.args).lists())
 
     for key, value in kwargs.items():
@@ -32,8 +41,10 @@ TYPE_MAP = {
 }
 
 
-#: Whether or not the request wants the response in json format
 def request_wants_json():
+    """
+    Whether or not the request wants the response in json format
+    """
     best = request.accept_mimetypes \
         .best_match(['application/json', 'text/html'])
     return best == 'application/json' and \
@@ -41,8 +52,11 @@ def request_wants_json():
         request.accept_mimetypes['text/html']
 
 
-#: Converts sqlalchemy type into python type
 def get_native_type(sqlalchemy_type):
+    """
+    Converts sqlalchemy type to python type, is smart enough to understand
+    types that extend basic sqlalchemy types
+    """
     for base_type in TYPE_MAP:
         if isinstance(sqlalchemy_type, base_type):
             return TYPE_MAP[base_type]
@@ -50,24 +64,24 @@ def get_native_type(sqlalchemy_type):
     return None
 
 
-class ModelView(View):
+class BaseView(View):
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+
+class ModelMixin(object):
     """
     Base class for all views interacting with models
 
-    :param model_class      SqlAlchemy Model class
-    :param resource_name    Name of the resource, if None the resource name
-                            will be constructed from the model class,
-                            eg.
-                                User -> user
-                                DeviceType -> device_type
+    :param model_class: SQLAlchemy Model class
     """
-    def __init__(self, model_class=None, resource_name=None, *args, **kwargs):
-        if model_class:
-            self.model_class = model_class
-        if not resource_name:
-            self.resource_name = underscore(self.model_class.__name__)
-        else:
-            self.resource_name = resource_name
+    model_class = None
+
+    def get_model(self):
+        if not self.model_class:
+            raise Exception()
+        return self.model_class
 
     @property
     def db(self):
@@ -88,26 +102,26 @@ class ModelView(View):
         raise NotImplementedError()
 
 
-class TemplateView(ModelView):
+class TemplateMixin(object):
     """
-    Generic template view
+    Generic template mixin
 
-    :param :template    name of the template to be rendered on html request
-    :param :context     dict containing context arguments that will be passed
-                        to template
+    :param template: name of the template to be rendered on html request
+    :param context: dict containing context arguments that will be passed
+        to template
     """
-    def __init__(self, template=None, context={}, *args, **kwargs):
-        ModelView.__init__(self, *args, **kwargs)
-        self.context = context
+    template = None
+    context = {}
 
-        if template:
-            self.template = template
-        else:
-            self.template = self.default_template % self.resource_name
+    def render_template(self, **kwargs):
+        context = self.get_context(**kwargs)
+        return render_template(self.get_template(), **context)
 
-    @property
-    def default_template(self):
-        raise NotImplementedError()
+    def get_template(self):
+        if not self.template:
+            raise Exception()
+
+        return self.template
 
     def get_context(self, **kwargs):
         if callable(self.context):
@@ -118,59 +132,125 @@ class TemplateView(ModelView):
         return context
 
 
-class ShowView(TemplateView):
-    default_template = '%s/show.html'
+class ModelView(BaseView, ModelMixin, TemplateMixin):
+    pk_param = 'id'
+
+    def get_template(self):
+        return TemplateMixin.get_template(self).format(
+            resource=underscore(self.model_class.__name__),
+        )
+
+    @property
+    def query(self):
+        return self.model_class.query
+
+    def get_object(self, **kwargs):
+        pk = kwargs[self.pk_param]
+        return self.query.get_or_404(pk)
+
+
+class ShowView(ModelView):
     """
     Generic show view
 
-    On text/html request returns html template with requested item
+    On text/html request returns html template with requested object
 
-    On json request returns requested item in json format
+    On json request returns requested object in json format
+
+    Example ::
+
+        >>> app.add_url_rule('/users/<int:id>',
+        ...     view_func=ShowUserView.as_view('show', model_class=User),
+        ... )
+
+    Now consider issuing a GET request to http://localhost:5000/users/3
+
+    ShowView renders user/show.html template if given user exists otherwise
+    returns 404
+
+    :param model_class: SQLAlchemy Model class
+    :param resource: Name of the resource, if None the resource name
+        will be constructed from the model class, e.g. DeviceType ->
+        device_type
+    :param template: name of the template to be rendered on html request
+    :param context: dict containing context arguments that will be passed
+        to template
+    :param template_object_name: Designates the name of the template variable
+        to use in the template context. By default, this is 'item'.
+
+
+    Rendered template context:
+
+    In addition to given `context`, the template's context will be:
+
+    item: The requested item. This variable's name depends on the
+    template_object_name parameter, which is 'item' by default. If
+    template_object_name is 'foo', this variable's name will be foo.
     """
-    def __init__(self, *args, **kwargs):
-        TemplateView.__init__(self, *args, **kwargs)
+    template = '{resource}/show.html'
 
     def dispatch_request(self, *args, **kwargs):
-        item = self.model_class.query.get_or_404(kwargs.values()[0])
-        context = self.get_context(item=item)
+        item = self.get_object(**kwargs)
         if request_wants_json():
             return jsonify(data=item.as_json())
         else:
-            return render_template(self.template, **context)
+            return self.render_template(item=item)
 
 
-class FormView(TemplateView):
+class FormView(ModelView):
     """
     Generic form view
 
-    :param success_redirect endpoint to be redirected on success
-    :param success_message  message to be flashed on success
+    :param success_redirect: endpoint to be redirected on success
+    :param success_message: message to be flashed on success
+    :param form_class: form class to be used for request params validation
     """
+    form_class = None
+    failure_message = ''
+    success_message = ''
+    success_redirect = None
 
-    def __init__(self,
-        form_class=None,
-        success_redirect=None,
-        success_message=None,
-        *args,
-        **kwargs):
-        TemplateView.__init__(self, *args, **kwargs)
-        if form_class:
-            self.form_class = form_class
-        if success_redirect:
-            self.success_redirect = success_redirect
-        else:
-            self.success_redirect = '%s.show' % self.resource_name
+    def get_success_redirect(self):
+        return self.success_redirect.format(
+            resource=underscore(self.model_class.__name__)
+        )
 
-        if success_message:
-            self.success_message = success_message
-        else:
-            self.success_message = self.success_message % \
-                self.model_class.__name__
+    def flash(self, message, *args, **kwargs):
+        if message:
+            flash(message, *args, **kwargs)
+
+    def get_success_message(self):
+        return self.success_message.format(
+            model=humanize(self.model_class.__name__)
+        )
+
+    def get_failure_message(self):
+        return self.failure_message.format(
+            model=humanize(self.model_class.__name__)
+        )
 
 
 class CreateFormView(FormView):
-    default_template = '%s/create.html'
-    success_message = '%s created!'
+    """
+    Generic create form view
+
+    Template name:
+    If template_name isn't specified, this view will use the template
+    <model_name>/create.html by default, where:
+
+    <model_name> is your model's name underscored. For a model
+    StaffMember, that'd be staff_member.
+
+    Template context:
+
+    In addition to given context, the template's context will be:
+
+    form: A form instance representing the form for editing the object. This
+    lets you refer to form fields easily in the template system.
+    """
+    template = '{resource}/create.html'
+    success_message = '{model} created!'
+    success_redirect = '{resource}.show'
     methods = ['GET', 'POST']
 
     def dispatch_request(self):
@@ -181,28 +261,29 @@ class CreateFormView(FormView):
             self.db.session.add(model)
             self.db.session.commit()
 
-            flash(self.success_message, 'success')
-            return redirect(url_for(self.success_redirect, id=model.id))
-        return render_template(self.template, form=form, item=model)
+            self.flash(self.get_success_message(), 'success')
+            return redirect(url_for(self.get_success_redirect(), id=model.id))
+        return self.render_template(form=form, item=model)
 
 
 class UpdateFormView(FormView):
-    default_template = '%s/edit.html'
-    success_message = '%s updated!'
+    template = '{resource}/edit.html'
+    success_message = '{model} updated!'
+    success_redirect = '{resource}.show'
     methods = ['GET', 'POST', 'PUT']
 
     def dispatch_request(self, *args, **kwargs):
-        item = self.model_class.query.get_or_404(kwargs.values()[0])
+        item = self.get_object(**kwargs)
         form = self.form_class(request.form, obj=item)
         if form.validate_on_submit():
             form.populate_obj(item)
             self.db.session.commit()
-            flash(self.success_message, 'success')
-            return redirect(url_for(self.success_redirect, id=item.id))
-        return render_template(self.template, item=item, form=form)
+            self.flash(self.get_success_message(), 'success')
+            return redirect(url_for(self.get_success_redirect(), id=item.id))
+        return self.render_template(item=item, form=form)
 
 
-class CreateView(ModelView):
+class CreateView(FormView):
     """
     Creates a model object
 
@@ -212,16 +293,8 @@ class CreateView(ModelView):
     On json request returns the create model object as json
     """
     methods = ['POST']
-
-    def __init__(self, success_redirect=None, success_message=None, *args,
-        **kwargs):
-        ModelView.__init__(self, *args, **kwargs)
-        self.success_redirect = '%s.show' % self.resource_name
-        if success_redirect:
-            self.success_redirect = success_redirect
-        self.success_message = '%s created!' % self.model_class.__name__
-        if success_message:
-            self.success_message = success_message
+    success_message = '{model} created!'
+    success_redirect = '{resource}.show'
 
     def dispatch_request(self, *args, **kwargs):
         item = self.model_class()
@@ -235,11 +308,11 @@ class CreateView(ModelView):
             response.status_code = 201
             return response
         else:
-            flash(self.success_message, 'success')
-            return redirect(url_for(self.success_redirect))
+            self.flash(self.get_success_message(), 'success')
+            return redirect(url_for(self.get_success_redirect(), id=item.id))
 
 
-class UpdateView(ModelView):
+class UpdateView(FormView):
     """
     Updates a model object
 
@@ -249,23 +322,11 @@ class UpdateView(ModelView):
     On json request returns the updated model object as json
     """
     methods = ['PUT']
-
-    def __init__(self,
-        success_redirect=None,
-        validator=None,
-        success_message=None,
-        *args,
-        **kwargs):
-        ModelView.__init__(self, *args, **kwargs)
-        self.success_redirect = '%s.show' % self.resource_name
-        if success_redirect:
-            self.success_redirect = success_redirect
-        self.success_message = '%s updated!' % self.model_class.__name__
-        if success_message:
-            self.success_message = success_message
+    success_message = '{model} updated!'
+    success_redirect = '{resource}.show'
 
     def dispatch_request(self, *args, **kwargs):
-        item = self.model_class.query.get_or_404(kwargs.values()[0])
+        item = self.get_object(**kwargs)
         for field, value in self.request_params.items():
             setattr(item, field, value)
         self.db.session.commit()
@@ -273,11 +334,11 @@ class UpdateView(ModelView):
         if request_wants_json():
             return jsonify(data=item.as_json())
         else:
-            flash(self.success_message, 'success')
-            return redirect(url_for(self.success_redirect))
+            self.flash(self.get_success_message(), 'success')
+            return redirect(url_for(self.get_success_redirect(), id=item.id))
 
 
-class DeleteView(ModelView):
+class DeleteView(FormView):
     """
     Deletes a model object
 
@@ -287,48 +348,35 @@ class DeleteView(ModelView):
     On json request returns an empty response with status code 204
     """
     methods = ['DELETE']
-
-    def __init__(self, success_redirect=None, success_message=None, *args,
-        **kwargs):
-        ModelView.__init__(self, *args, **kwargs)
-        self.success_redirect = '%s.index' % self.resource_name
-        if success_redirect:
-            self.success_redirect = success_redirect
-        self.success_message = '%s deleted.' % self.model_class.__name__
-        if success_message:
-            self.success_message = success_message
+    success_message = '{model} deleted.'
+    success_redirect = '{resource}.index'
 
     def dispatch_request(self, *args, **kwargs):
-        item = self.model_class.query.get(kwargs.values()[0])
+        item = self.get_object(**kwargs)
         self.db.session.delete(item)
         self.db.session.commit()
-        flash(self.success_message, 'success')
 
         if request_wants_json():
             return Response(status=204)
         else:
-            return redirect(url_for(self.success_redirect))
+            self.flash(self.get_success_message(), 'success')
+            return redirect(url_for(self.get_success_redirect()))
 
 
-class ListView(TemplateView):
-    default_template = '%s/index.html'
+class ListView(ModelView):
     """
     Views several items as a list
 
     :param query    the query to be used for fetching the items, by default
                     this is model.query (= all records for given model)
     """
+    template = '{resource}/index.html'
 
     def __init__(self,
-        query=None,
         query_field_names=None,
         columns=None,
         *args, **kwargs):
-        TemplateView.__init__(self, *args, **kwargs)
-        if query:
-            self.query = query
-        else:
-            self.query = self.model_class.query
+        ModelView.__init__(self, *args, **kwargs)
 
         if query_field_names:
             self.query_field_names = query_field_names
@@ -367,30 +415,7 @@ class ListView(TemplateView):
         return None
 
 
-class SortedListView(ListView):
-    """
-    Expands ListView with filters, paging and sorting
-
-    :param per_page     number of items to show per_page
-    :param sort         the default column to use for sorting the results
-                        eg. sort='name'
-                            return the items ordered by name ascending
-                            sort='-name'
-                            return the items ordered by name descending
-    """
-    def __init__(self,
-        form_class=None,
-        per_page=20,
-        sort='',
-        *args,
-        **kwargs):
-        ListView.__init__(self, *args, **kwargs)
-
-        self.form_class = form_class
-
-        self.per_page = per_page
-        self.sort = sort
-
+class SearchMixin(object):
     def append_filters(self, query):
         for row in self.columns:
             name, alias = row
@@ -419,29 +444,17 @@ class SortedListView(ListView):
                         pass
         return query
 
-    def append_pagination(self, query):
-        try:
-            page = int(request.args.get('page', 1))
-        except ValueError:
-            page = 1
 
-        try:
-            per_page = int(request.args.get('per_page', self.per_page))
-        except ValueError:
-            per_page = self.per_page
+class SortMixin(object):
+    sort = ''
 
-        pagination = query.paginate(page, per_page)
-        return pagination
-
-    def dispatch_request(self):
-        query = self.query
+    def append_sort(self, query):
         entities = [entity.entity_zero.class_ for entity in \
-            query._entities]
-        query = self.append_filters(query)
+            self.query._entities]
 
-        sort = request.args.get('sort', '')
+        sort = request.args.get('sort', self.sort)
         if not sort:
-            sort = self.sort
+            return query
 
         order_by = sort
         if sort:
@@ -456,7 +469,44 @@ class SortedListView(ListView):
                 if order_by in entity.__table__.columns:
                     query = query.order_by(func(getattr(entity, order_by)))
                     break
+        return query
 
+
+class PaginationMixin(object):
+    per_page = 20
+    page = 1
+
+    def append_pagination(self, query):
+        try:
+            page = int(request.args.get('page', 1))
+        except ValueError:
+            page = 1
+
+        try:
+            per_page = int(request.args.get('per_page', self.per_page))
+        except ValueError:
+            per_page = self.per_page
+
+        pagination = query.paginate(page, per_page)
+        return pagination
+
+
+class SortedListView(ListView, SortMixin, PaginationMixin, SearchMixin):
+    """
+    Expands ListView with filters, paging and sorting
+
+    :param per_page     number of items to show per_page
+    :param sort         the default column to use for sorting the results
+                        eg. sort='name'
+                            return the items ordered by name ascending
+                            sort='-name'
+                            return the items ordered by name descending
+    """
+    form_class = None
+
+    def dispatch_request(self):
+        query = self.append_filters(self.query)
+        query = self.append_sort(query)
         pagination = self.append_pagination(query)
         items = self.execute_query(pagination)
 
@@ -476,11 +526,10 @@ class SortedListView(ListView):
                 data=[item.as_json() for item in items]
             )
         else:
-            return render_template(
-                self.template,
+            return self.render_template(
                 items=items,
                 columns=self.columns,
-                sort=sort,
+                sort=self.sort,
                 per_page=pagination.per_page,
                 page=pagination.page,
                 total_items=pagination.total,
@@ -491,7 +540,7 @@ class SortedListView(ListView):
 
 class ModelRouter(object):
     """
-    Generates standard routes for given model
+    ModelRouter glues different views together
 
     index    GET     /
     new      GET     /new
@@ -515,9 +564,41 @@ class ModelRouter(object):
     create   POST    /              redirects to show
     update   PUT     /<name>        redirects to show
     delete   DELETE  /<name>        redirects to index
+
+    Example ::
+
+    Assume we have a model class called User
+
+        >>> router = ModelRouter(User)
+        >>> router.register()
+
+
+    :param decorators decorators to be passed to all views within this router
+    :param model_class model_class to be passed to all views
     """
-    def __init__(self, model_class, decorators=[]):
+    decorators = []
+    route_prefix = ''
+    model_class = None
+    route_key = None
+    routes = {
+        'index': ['{prefix}', SortedListView, {}],
+        'create': ['{prefix}', CreateView, {}],
+        'edit': ['{prefix}/{primary_key}/edit', UpdateFormView, {}],
+        'new': ['{prefix}/new', CreateFormView, {}],
+        'update': ['{prefix}/{primary_key}', UpdateView, {}],
+        'delete': ['{prefix}/{primary_key}', DeleteView, {}],
+        'show': ['{prefix}/{primary_key}', ShowView, {}]
+    }
+
+    def __init__(self, model_class, **kwargs):
         self.model_class = model_class
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+    def get_route_key(self):
+        if self.route_key is not None:
+            return self.route_key
+
         primary_key = self.model_class.__table__.primary_key.columns
         if len(primary_key.keys()) > 1:
             raise Exception('''Could not create api for model with composite
@@ -529,31 +610,58 @@ class ModelRouter(object):
             self.route_key = '<int:%s>' % name
         else:
             self.route_key = '<%s>' % name
+        return self.route_key
 
-        self.decorators = decorators
-
-        self.routes = {
-            'index': ['', SortedListView, {}],
-            'create': ['', CreateView, {}],
-            'edit': ['/{primary_key}/edit', UpdateFormView, {}],
-            'new': ['/new', CreateFormView, {}],
-            'update': ['/{primary_key}', UpdateView, {}],
-            'delete': ['/{primary_key}', DeleteView, {}],
-            'show': ['/{primary_key}', ShowView, {}]
-        }
-
+    def get_routes(self):
+        routes = copy(self.routes)
         for key in self.routes:
-            self.routes[key][0] = self.routes[key][0].format(
-                primary_key=self.route_key
+            routes[key][0] = self.routes[key][0].format(
+                primary_key=self.get_route_key(),
+                prefix=self.route_prefix
             )
+        return routes
 
     def bind_view(self, key, view):
+        """
+        bind_view can be used for overriding default views
+
+        Lets say for example that we have a custom ShowView class called
+        UserShowView
+
+        You can easily override the default show class by:
+
+        Example ::
+
+            >>> router.bind_view('show', UserShowView)
+        """
         self.routes[key][1] = view
 
     def bind_view_args(self, key, **kwargs):
+        """
+        bind_view_args can be used for overriding specific view args
+
+        Lets say you want to pass custom form class for edit
+
+        You can achieve this with:
+
+        Example ::
+
+            >>> router.bind_view_args('edit', form_class=MyCustomForm)
+        """
         self.routes[key][2] = kwargs
 
     def bind_route(self, key, route):
+        """
+        bind_route can be used for overriding default routes
+
+        Lets say you want to route index to '/index' instead of '/'
+
+        You can achieve this with:
+
+        Example ::
+
+            >>> router.bind_route('index', '/index')
+        """
         self.routes[key][0] = route
 
     def register(self, blueprint=None):
@@ -561,7 +669,7 @@ class ModelRouter(object):
             blueprint = Blueprint(underscore(self.model_class.__name__),
                 __name__)
 
-        for key, value in self.routes.items():
+        for key, value in self.get_routes().items():
             route, view, kwargs = value
             view_func = view.as_view(
                 key,
