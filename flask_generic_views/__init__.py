@@ -479,16 +479,8 @@ class PaginationMixin(object):
     page = 1
 
     def append_pagination(self, query):
-        try:
-            page = int(request.args.get('page', 1))
-        except ValueError:
-            page = 1
-
-        try:
-            per_page = int(request.args.get('per_page', self.per_page))
-        except ValueError:
-            per_page = self.per_page
-
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', self.per_page, type=int)
         pagination = query.paginate(page, per_page)
         return pagination
 
