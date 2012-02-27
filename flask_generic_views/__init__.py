@@ -582,20 +582,21 @@ class ModelRouter(object):
     route_prefix = ''
     model_class = None
     route_key = None
-    routes = {
-        'index': ['{prefix}', SortedListView, {}],
-        'create': ['{prefix}', CreateView, {}],
-        'edit': ['{prefix}/{primary_key}/edit', UpdateFormView, {}],
-        'new': ['{prefix}/new', CreateFormView, {}],
-        'update': ['{prefix}/{primary_key}', UpdateView, {}],
-        'delete': ['{prefix}/{primary_key}', DeleteView, {}],
-        'show': ['{prefix}/{primary_key}', ShowView, {}]
-    }
 
     def __init__(self, model_class, **kwargs):
         self.model_class = model_class
         for key, value in kwargs.items():
             setattr(self, key, value)
+
+        self.routes = {
+            'index': ['{prefix}', SortedListView, {}],
+            'create': ['{prefix}', CreateView, {}],
+            'edit': ['{prefix}/{primary_key}/edit', UpdateFormView, {}],
+            'new': ['{prefix}/new', CreateFormView, {}],
+            'update': ['{prefix}/{primary_key}', UpdateView, {}],
+            'delete': ['{prefix}/{primary_key}', DeleteView, {}],
+            'show': ['{prefix}/{primary_key}', ShowView, {}]
+        }
 
     def get_route_key(self):
         if self.route_key is not None:
