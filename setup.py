@@ -37,7 +37,8 @@ setup(
     install_requires=[
         'Flask',
         'Flask-SQLAlchemy',
-        'inflection==0.1.1'
+        'inflection==0.1.1',
+        'WTForms'
     ],
     cmdclass={
         'test': PyTest
