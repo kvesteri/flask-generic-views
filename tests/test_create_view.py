@@ -9,8 +9,7 @@ class TestCreateView(ViewTestCase):
 
         self.app.add_url_rule('/users',
             view_func=CreateView.as_view('create',
-            model_class=User,
-            validator=lambda a: a),
+            model_class=User),
         )
         self.app.add_url_rule('/users/<int:id>',
             view_func=ShowView.as_view('user.show', model_class=User)
@@ -22,6 +21,13 @@ class TestCreateView(ViewTestCase):
         )
         assert response.status_code == 201
         assert User.query.first().name == u'Jack Daniels'
+
+    def test_failing_json_request(self):
+        response = self.xhr_client.post('/users',
+            data={'age': 'Invalid'}
+        )
+        assert 'errors' in response.json
+        assert response.status_code == 400
 
     def test_html_requests_redirect_on_success(self):
         response = self.client.post('/users',

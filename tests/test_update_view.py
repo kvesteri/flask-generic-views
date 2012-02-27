@@ -31,6 +31,13 @@ class TestUpdateView(ViewTestCase):
         response = self.xhr_client.put('/users/123123')
         assert response.status_code == 404
 
+    def test_failing_json_request(self):
+        response = self.xhr_client.put('/users/1',
+            data={'age': 'Invalid'}
+        )
+        assert 'errors' in response.json
+        assert response.status_code == 400
+
     def test_html_requests_redirect_on_success(self):
         response = self.client.put('/users/1',
             data={'name': u'Jack Daniels'}

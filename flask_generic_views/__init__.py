@@ -2,11 +2,12 @@ from copy import copy
 from datetime import datetime, date, time
 from decimal import Decimal
 from flask import (render_template, request, redirect, url_for, flash,
-    current_app, jsonify, Response, Blueprint)
+    current_app, jsonify, Response, Blueprint, abort)
 from flask.views import View
 from inflection import underscore, humanize
 from sqlalchemy import types
 from werkzeug.datastructures import MultiDict
+from wtforms.ext.sqlalchemy.orm import model_form
 
 
 def qp_url_for(endpoint, **kwargs):
@@ -68,6 +69,15 @@ class BaseView(View):
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
             setattr(self, key, value)
+
+    def request_params_as_multidict(self):
+        if request.is_xhr:
+            if request.json:
+                return MultiDict(request.json)
+            else:
+                return MultiDict({})
+        else:
+            return request.form
 
 
 class ModelMixin(object):
@@ -205,6 +215,7 @@ class FormView(ModelView):
 
     :param success_redirect: endpoint to be redirected on success
     :param success_message: message to be flashed on success
+    :param failure_message: message to be flashed on failure
     :param form_class: form class to be used for request params validation
     """
     form_class = None
@@ -212,24 +223,67 @@ class FormView(ModelView):
     success_message = ''
     success_redirect = None
 
+    def validate_on_submit(self, form):
+        return request.method in ('PUT', 'POST') and form.validate()
+
+    def get_form(self, obj=None):
+        if self.form_class:
+            return self.form_class(self.request_params_as_multidict(), obj=obj)
+        return model_form(self.model_class)(self.request_params_as_multidict(), obj=obj)
+
     def get_success_redirect(self):
         return self.success_redirect.format(
             resource=underscore(self.model_class.__name__)
         )
 
     def flash(self, message, *args, **kwargs):
+        """
+        Flashes given message with arguments
+        """
         if message:
             flash(message, *args, **kwargs)
 
     def get_success_message(self):
+        """
+        Returns the formatted success message (if any)
+        """
         return self.success_message.format(
             model=humanize(self.model_class.__name__)
         )
 
     def get_failure_message(self):
+        """
+        Returns the formatted failure message (if any)
+        """
         return self.failure_message.format(
             model=humanize(self.model_class.__name__)
         )
+
+    def save(self, form, object):
+        """
+        Validates request data and saves object, on success redirects to
+        success url and flashes success message (if any)
+        """
+        if form.validate():
+            form.populate_obj(object)
+            self.db.session.commit()
+
+            self.flash(self.get_success_message(), 'success')
+            return True
+        else:
+            self.flash(self.get_failure_message(), 'failure')
+            if request_wants_json():
+                response = jsonify(errors=form.errors)
+                response.status_code = 400
+                abort(response)
+            return False
+
+    def dispatch_request(self, *args, **kwargs):
+        item = self.get_object(**kwargs)
+        form = self.get_form(obj=item)
+        if self.save(form, item):
+            return redirect(url_for(self.get_success_redirect(), id=item.id))
+        return self.render_template(item=item, form=form)
 
 
 class CreateFormView(FormView):
@@ -255,17 +309,10 @@ class CreateFormView(FormView):
     success_redirect = '{resource}.show'
     methods = ['GET', 'POST']
 
-    def dispatch_request(self):
-        model = self.model_class()
-        form = self.form_class(request.form, obj=model)
-        if form.validate_on_submit():
-            form.populate_obj(model)
-            self.db.session.add(model)
-            self.db.session.commit()
-
-            self.flash(self.get_success_message(), 'success')
-            return redirect(url_for(self.get_success_redirect(), id=model.id))
-        return self.render_template(form=form, item=model)
+    def get_object(self):
+        object = self.model_class()
+        self.db.session.add(object)
+        return object
 
 
 class UpdateFormView(FormView):
@@ -273,16 +320,6 @@ class UpdateFormView(FormView):
     success_message = '{model} updated!'
     success_redirect = '{resource}.show'
     methods = ['GET', 'POST', 'PUT']
-
-    def dispatch_request(self, *args, **kwargs):
-        item = self.get_object(**kwargs)
-        form = self.form_class(request.form, obj=item)
-        if form.validate_on_submit():
-            form.populate_obj(item)
-            self.db.session.commit()
-            self.flash(self.get_success_message(), 'success')
-            return redirect(url_for(self.get_success_redirect(), id=item.id))
-        return self.render_template(item=item, form=form)
 
 
 class CreateView(FormView):
@@ -298,19 +335,21 @@ class CreateView(FormView):
     success_message = '{model} created!'
     success_redirect = '{resource}.show'
 
+    def get_object(self):
+        object = self.model_class()
+        self.db.session.add(object)
+        return object
+
     def dispatch_request(self, *args, **kwargs):
-        item = self.model_class()
-        for field, value in self.request_params.items():
-            setattr(item, field, value)
-        self.db.session.add(item)
-        self.db.session.commit()
+        item = self.get_object()
+        form = self.get_form(obj=item)
+        self.save(form, item)
 
         if request_wants_json():
             response = jsonify(data=item.as_json())
             response.status_code = 201
             return response
         else:
-            self.flash(self.get_success_message(), 'success')
             return redirect(url_for(self.get_success_redirect(), id=item.id))
 
 
@@ -329,14 +368,12 @@ class UpdateView(FormView):
 
     def dispatch_request(self, *args, **kwargs):
         item = self.get_object(**kwargs)
-        for field, value in self.request_params.items():
-            setattr(item, field, value)
-        self.db.session.commit()
+        form = self.get_form(obj=item)
+        self.save(form, item)
 
         if request_wants_json():
             return jsonify(data=item.as_json())
         else:
-            self.flash(self.get_success_message(), 'success')
             return redirect(url_for(self.get_success_redirect(), id=item.id))
 
 
@@ -349,7 +386,7 @@ class DeleteView(FormView):
 
     On json request returns an empty response with status code 204
     """
-    methods = ['DELETE']
+    methods = ['DELETE', 'POST']
     success_message = '{model} deleted.'
     success_redirect = '{resource}.index'
 

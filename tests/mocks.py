@@ -3,7 +3,7 @@ class MockForm(object):
         self.params = params
         self.obj = obj
 
-    def validate_on_submit(self):
+    def validate(self):
         return len(self.params) > 0
 
     def populate_obj(self, obj):
