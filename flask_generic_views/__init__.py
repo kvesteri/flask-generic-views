@@ -134,19 +134,21 @@ class TemplateMixin(object):
 
 class ModelView(BaseView, ModelMixin, TemplateMixin):
     pk_param = 'id'
+    query = None
 
     def get_template(self):
         return TemplateMixin.get_template(self).format(
             resource=underscore(self.model_class.__name__),
         )
 
-    @property
-    def query(self):
+    def get_query(self):
+        if self.query:
+            return self.query
         return self.model_class.query
 
     def get_object(self, **kwargs):
         pk = kwargs[self.pk_param]
-        return self.query.get_or_404(pk)
+        return self.get_query().get_or_404(pk)
 
 
 class ShowView(ModelView):
@@ -389,7 +391,7 @@ class ListView(ModelView):
             self.columns = self.default_columns()
 
     def default_query_field_names(self):
-        return self.query._entities[0].entity_zero.class_.__table__ \
+        return self.get_query()._entities[0].entity_zero.class_.__table__ \
             .columns.keys()
 
     def default_columns(self):
@@ -406,7 +408,7 @@ class ListView(ModelView):
 
     def entity_column(self, column):
         entities = [entity.entity_zero.class_ for entity in \
-            self.query._entities]
+            self.get_query()._entities]
 
         for entity in entities:
             columns = entity.__table__.columns
@@ -450,7 +452,7 @@ class SortMixin(object):
 
     def append_sort(self, query):
         entities = [entity.entity_zero.class_ for entity in \
-            self.query._entities]
+            self.get_query()._entities]
 
         sort = request.args.get('sort', self.sort)
         if not sort:
@@ -505,7 +507,7 @@ class SortedListView(ListView, SortMixin, PaginationMixin, SearchMixin):
     form_class = None
 
     def dispatch_request(self):
-        query = self.append_filters(self.query)
+        query = self.append_filters(self.get_query())
         query = self.append_sort(query)
         pagination = self.append_pagination(query)
         items = self.execute_query(pagination)
