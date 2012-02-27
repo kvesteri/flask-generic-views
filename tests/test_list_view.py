@@ -109,3 +109,13 @@ class TestListViewSorting(ListViewTestCase):
         data = response.json['data']
         assert data[0]['name'] == 'Luke Skywalker'
         assert data[1]['name'] == 'John Matrix'
+
+    def test_sort_added_to_template_context(self):
+        self.view = SortedListView.as_view('index', model_class=User,
+            sort='-name')
+        self.app.add_url_rule('/users',
+            view_func=self.view,
+        )
+        response = self.client.get('/users')
+
+        assert 'sort: -name' in response.data

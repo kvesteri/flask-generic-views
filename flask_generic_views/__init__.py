@@ -454,15 +454,15 @@ class SortMixin(object):
         entities = [entity.entity_zero.class_ for entity in \
             self.get_query()._entities]
 
-        sort = request.args.get('sort', self.sort)
-        if not sort:
+        self.sort = request.args.get('sort', self.sort)
+        if not self.sort:
             return query
 
-        order_by = sort
-        if sort:
-            if sort[0] == '-':
+        order_by = self.sort
+        if self.sort:
+            if self.sort[0] == '-':
                 func = self.db.desc
-                order_by = sort[1:]
+                order_by = self.sort[1:]
             else:
                 func = self.db.asc
 
