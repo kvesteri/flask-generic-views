@@ -1,3 +1,17 @@
+"""
+Flask-GenericViews (FGV) provides view abstraction for common CRUD operations.
+Each CRUD operation has its own view for example:
+    - show details of an object (ShowView)
+    - create an object (CreateView)
+    - update an object (UpdateView)
+    - delete an object (DeleteView)
+    - list objects (ListView)
+
+Similar to Django Generic Views FGV is built very modular. Flask-GenericViews
+also provides means for plugging the standard API routes for the views
+(see ModelRouter for more info). FGV is built on top of Flask, SQLAlchemy,
+WTForms.
+"""
 from copy import copy
 from datetime import datetime, date, time
 from decimal import Decimal
@@ -227,9 +241,10 @@ class FormView(ModelView):
         return request.method in ('PUT', 'POST') and form.validate()
 
     def get_form(self, obj=None):
+        params = self.request_params_as_multidict()
         if self.form_class:
-            return self.form_class(self.request_params_as_multidict(), obj=obj)
-        return model_form(self.model_class)(self.request_params_as_multidict(), obj=obj)
+            return self.form_class(params, obj=obj)
+        return model_form(self.model_class)(params, obj=obj)
 
     def get_success_redirect(self):
         return self.success_redirect.format(
@@ -263,6 +278,8 @@ class FormView(ModelView):
         """
         Validates request data and saves object, on success redirects to
         success url and flashes success message (if any)
+
+        On failing json request aborts and returns jsonified errors
         """
         if form.validate():
             form.populate_obj(object)
