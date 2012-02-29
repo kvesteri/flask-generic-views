@@ -148,6 +148,9 @@ class TemplateMixin(object):
         return self.template
 
     def get_context(self, **kwargs):
+        """
+        Returns the context variables
+        """
         if callable(self.context):
             context = self.context()
         else:
@@ -166,6 +169,11 @@ class ModelView(BaseView, ModelMixin, TemplateMixin):
         )
 
     def get_query(self):
+        """
+        Returns the query associated with this view
+
+        If no query was given, tries to use the query class of the model
+        """
         if self.query:
             return self.query
         return self.model_class.query
@@ -241,12 +249,20 @@ class FormView(ModelView):
         return request.method in ('PUT', 'POST') and form.validate()
 
     def get_form(self, obj=None):
+        """
+        Returns the form associated with this view if the form_class could
+        not be found FormView tries to build the form using model_form
+        function of wtforms sqlalchemy extension
+        """
         params = self.request_params_as_multidict()
         if self.form_class:
             return self.form_class(params, obj=obj)
         return model_form(self.model_class)(params, obj=obj)
 
     def get_success_redirect(self):
+        """
+        Returns the url to redirect to on successful request
+        """
         return self.success_redirect.format(
             resource=underscore(self.model_class.__name__)
         )
@@ -407,9 +423,17 @@ class DeleteView(FormView):
     success_message = '{model} deleted.'
     success_redirect = '{resource}.index'
 
+    def delete(self, item):
+        """
+        This method is used for the actual deletion of given item
+
+        Child classes may override the behaviour of this method
+        """
+        self.db.session.delete(item)
+
     def dispatch_request(self, *args, **kwargs):
         item = self.get_object(**kwargs)
-        self.db.session.delete(item)
+        self.delete(item)
         self.db.session.commit()
 
         if request_wants_json():
@@ -417,6 +441,15 @@ class DeleteView(FormView):
         else:
             self.flash(self.get_success_message(), 'success')
             return redirect(url_for(self.get_success_redirect()))
+
+
+class SoftDeleteView(DeleteView):
+    """
+    Same as delete view except objects are not actually deleted -> they are
+    marked as deleted.
+    """
+    def delete(self, item):
+        item.deleted_at = datetime.now()
 
 
 class ListView(ModelView):
@@ -529,6 +562,10 @@ class SortMixin(object):
 
 
 class PaginationMixin(object):
+    """
+    This mixin can be used for applying pagination functionality to Views
+    (for example views that use some kind listing)
+    """
     per_page = 20
     page = 1
 
@@ -662,6 +699,9 @@ class ModelRouter(object):
         return self.route_key
 
     def get_routes(self):
+        """
+        Returns the formatted routes
+        """
         routes = copy(self.routes)
         for key in self.routes:
             routes[key][0] = self.routes[key][0].format(

@@ -44,6 +44,12 @@ class TestListView(ListViewTestCase):
         assert response.status_code == 200
         assert response.json['data'][0]['name'] == u'John Matrix'
 
+    def test_supports_integer_filters(self):
+        response = self.xhr_client.get('/users?age=13')
+        assert response.json['data'] == []
+
+
+def TestListPaging(ListViewTestCase):
     def test_json_returns_pagination_params(self):
         response = self.xhr_client.get('/users?name=John')
 
@@ -51,10 +57,6 @@ class TestListView(ListViewTestCase):
         assert response.json['pagination']['page'] == 1
         assert response.json['pagination']['per_page'] == 20
         assert response.json['pagination']['pages'] == 1
-
-    def test_supports_integer_filters(self):
-        response = self.xhr_client.get('/users?age=13')
-        assert response.json['data'] == []
 
     def test_per_page_parameter(self):
         response = self.xhr_client.get('/users?page=1&per_page=2')
