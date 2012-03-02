@@ -28,7 +28,7 @@ setup(
     long_description=__doc__,
     author='Konsta Vesterinen',
     author_email='konsta.vesterinen@gmail.com',
-    url='http://github.com/LiiquOy/flask-generic-views',
+    url='http://github.com/kvesteri/flask-generic-views',
     packages=['flask_generic_views'],
     include_package_data=True,
     license='BSD',
