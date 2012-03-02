@@ -1,24 +1,10 @@
 import sys
 import subprocess
 
-import distribute_setup
-distribute_setup.use_setuptools()
-
-from setuptools import Command, setup
-
-
-class PyTest(Command):
-    user_options = []
-
-    def initialize_options(self):
-        pass
-
-    def finalize_options(self):
-        pass
-
-    def run(self):
-        errno = subprocess.call([sys.executable, 'runtests.py'])
-        raise SystemExit(errno)
+try:
+    from setuptools import setup
+except ImportError:
+    from distutils import setup
 
 
 setup(
@@ -40,9 +26,6 @@ setup(
         'inflection==0.1.1',
         'WTForms'
     ],
-    cmdclass={
-        'test': PyTest
-    },
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
