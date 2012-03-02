@@ -1,17 +1,24 @@
 # -*- coding: utf-8 -*-
 """
-Flask-GenericViews (FGV) provides view abstraction for common CRUD operations.
-Each CRUD operation has its own view for example:
+    flask.ext.generic_views
+    ~~~~~~~~~~~~~~~~~~~~~~~
+
+    Flask-GenericViews (FGV) provides view abstraction for common CRUD
+    operations.  Each CRUD operation has its own view for example:
+
     - show details of an object (ShowView)
     - create an object (CreateView)
     - update an object (UpdateView)
     - delete an object (DeleteView)
     - list objects (ListView)
 
-Similar to Django Generic Views FGV is built very modular. Flask-GenericViews
-also provides means for plugging the standard API routes for the views
-(see ModelRouter for more info). FGV is built on top of Flask, SQLAlchemy,
-WTForms.
+    Similar to Django Generic Views FGV is built very modular.
+    Flask-GenericViews also provides means for plugging the standard API
+    routes for the views (see ModelRouter for more info). FGV is built on
+    top of Flask, SQLAlchemy, WTForms.
+
+    :copyright: (c) 2012 Konsta Vesterinen.
+    :license: BSD, see LICENSE for more details.
 """
 
 __version__ = '0.1.21'
