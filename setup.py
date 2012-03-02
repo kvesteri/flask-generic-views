@@ -1,6 +1,3 @@
-import sys
-import subprocess
-
 try:
     from setuptools import setup
 except ImportError:
