@@ -20,10 +20,6 @@
     :copyright: (c) 2012 Konsta Vesterinen.
     :license: BSD, see LICENSE for more details.
 """
-
-__version__ = '0.1.21'
-
-
 from copy import copy
 from datetime import datetime, date, time
 from decimal import Decimal
