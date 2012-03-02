@@ -12,6 +12,10 @@ also provides means for plugging the standard API routes for the views
 (see ModelRouter for more info). FGV is built on top of Flask, SQLAlchemy,
 WTForms.
 """
+
+__version__ = '0.1.21'
+
+
 from copy import copy
 from datetime import datetime, date, time
 from decimal import Decimal

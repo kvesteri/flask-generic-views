@@ -1,3 +1,5 @@
+import flask_generic_views
+
 try:
     from setuptools import setup
 except ImportError:
@@ -6,7 +8,7 @@ except ImportError:
 
 setup(
     name='Flask-GenericViews',
-    version='0.1.21',
+    version=flask_generic_views.__version__,
     description='Generic Views for Flask',
     long_description=__doc__,
     author='Konsta Vesterinen',
