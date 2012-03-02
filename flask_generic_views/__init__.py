@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Flask-GenericViews (FGV) provides view abstraction for common CRUD operations.
 Each CRUD operation has its own view for example:
