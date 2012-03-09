@@ -305,6 +305,8 @@ class FormView(ModelView):
 
         On failing json request aborts and returns jsonified errors
         """
+        if request.method not in ['POST', 'PUT']:
+            return False
         if form.validate():
             form.populate_obj(object)
             self.db.session.commit()
@@ -333,9 +335,9 @@ class CreateFormView(FormView):
 
     Template name:
     If template_name isn't specified, this view will use the template
-    <model_name>/create.html by default, where:
+    <resource>/create.html by default, where:
 
-    <model_name> is your model's name underscored. For a model
+    <resource> is your model's name underscored. For a model
     StaffMember, that'd be staff_member.
 
     Template context:
@@ -357,6 +359,23 @@ class CreateFormView(FormView):
 
 
 class UpdateFormView(FormView):
+    """
+    Generic update form view
+
+    Template name:
+    If template_name isn't specified, this view will use the template
+    <resource>/edit.html by default, where:
+
+    <resource> is your model's name underscored. For a model
+    StaffMember, that'd be staff_member.
+
+    Template context:
+
+    In addition to given context, the template's context will be:
+
+    form: A form instance representing the form for editing the object. This
+    lets you refer to form fields easily in the template system.
+    """
     template = '{resource}/edit.html'
     success_message = '{model} updated!'
     success_redirect = '{resource}.show'

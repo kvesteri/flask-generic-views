@@ -6,7 +6,7 @@ except ImportError:
 
 setup(
     name='Flask-GenericViews',
-    version='0.1.21',
+    version='0.1.22',
     description='Generic Views for Flask',
     long_description=__doc__,
     author='Konsta Vesterinen',
