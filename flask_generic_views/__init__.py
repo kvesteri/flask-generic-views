@@ -87,37 +87,20 @@ def get_native_type(sqlalchemy_type):
     return None
 
 
+def get_request_params():
+    if request.is_xhr:
+        if request.json:
+            return MultiDict(request.json)
+        else:
+            return MultiDict({})
+    else:
+        return request.form
+
+
 class BaseView(View):
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
             setattr(self, key, value)
-
-    def request_params_as_multidict(self):
-        if request.is_xhr:
-            if request.json:
-                return MultiDict(request.json)
-            else:
-                return MultiDict({})
-        else:
-            return request.form
-
-
-class ModelMixin(object):
-    """
-    Base class for all views interacting with models
-
-    :param model_class: SQLAlchemy Model class
-    """
-    model_class = None
-
-    def get_model(self):
-        if not self.model_class:
-            raise Exception()
-        return self.model_class
-
-    @property
-    def db(self):
-        return current_app.extensions['sqlalchemy'].db
 
     @property
     def request_params(self):
@@ -130,8 +113,44 @@ class ModelMixin(object):
 
         return data
 
-    def dispatch_request(self, *args, **kwargs):
-        raise NotImplementedError()
+
+class ModelMixin(object):
+    """
+    Base class for all views interacting with models
+
+    :param model_class: SQLAlchemy Model class
+    :param query: the query to be used for fetching the object
+    :param pk_param: name of the primary key parameter
+    """
+    model_class = None
+    query = None
+    pk_param = 'id'
+
+    def get_model(self):
+        if not self.model_class:
+            raise Exception()
+        return self.model_class
+
+    @property
+    def db(self):
+        return current_app.extensions['sqlalchemy'].db
+
+    def get_query(self):
+        """
+        Returns the query associated with this view
+
+        If no query was given, tries to use the query class of the model
+        """
+        if self.query:
+            return self.query
+        return self.model_class.query
+
+    def get_object(self, **kwargs):
+        pk = kwargs[self.pk_param]
+        return self.get_query().get_or_404(pk)
+
+    def jsonify(self, item):
+        return jsonify(data=item.as_json())
 
 
 class TemplateMixin(object):
@@ -168,27 +187,10 @@ class TemplateMixin(object):
 
 
 class ModelView(BaseView, ModelMixin, TemplateMixin):
-    pk_param = 'id'
-    query = None
-
     def get_template(self):
         return TemplateMixin.get_template(self).format(
             resource=underscore(self.model_class.__name__),
         )
-
-    def get_query(self):
-        """
-        Returns the query associated with this view
-
-        If no query was given, tries to use the query class of the model
-        """
-        if self.query:
-            return self.query
-        return self.model_class.query
-
-    def get_object(self, **kwargs):
-        pk = kwargs[self.pk_param]
-        return self.get_query().get_or_404(pk)
 
 
 class ShowView(ModelView):
@@ -234,46 +236,24 @@ class ShowView(ModelView):
     def dispatch_request(self, *args, **kwargs):
         item = self.get_object(**kwargs)
         if request_wants_json():
-            return jsonify(data=item.as_json())
+            return self.jsonify(item)
         else:
             return self.render_template(item=item)
 
 
-class FormView(ModelView):
+class FormMixin(object):
     """
     Generic form view
 
+    :param form_class: form class to be used for request params validation
     :param success_redirect: endpoint to be redirected on success
     :param success_message: message to be flashed on success
     :param failure_message: message to be flashed on failure
-    :param form_class: form class to be used for request params validation
     """
     form_class = None
     failure_message = ''
     success_message = ''
-    success_redirect = None
-
-    def validate_on_submit(self, form):
-        return request.method in ('PUT', 'POST') and form.validate()
-
-    def get_form(self, obj=None):
-        """
-        Returns the form associated with this view if the form_class could
-        not be found FormView tries to build the form using model_form
-        function of wtforms sqlalchemy extension
-        """
-        params = self.request_params_as_multidict()
-        if self.form_class:
-            return self.form_class(params, obj=obj)
-        return model_form(self.model_class)(params, obj=obj)
-
-    def get_success_redirect(self):
-        """
-        Returns the url to redirect to on successful request
-        """
-        return self.success_redirect.format(
-            resource=underscore(self.model_class.__name__)
-        )
+    success_url = None
 
     def flash(self, message, *args, **kwargs):
         """
@@ -281,6 +261,94 @@ class FormView(ModelView):
         """
         if message:
             flash(message, *args, **kwargs)
+
+    def is_submitted(self):
+        return request.method in set(self.methods).difference('GET')
+
+    def validate_on_submit(self, form):
+        return self.is_submitted() and form.validate()
+
+    def save(self, form, object):
+        """
+        Validates request data and saves object, on success redirects to
+        success url and flashes success message (if any)
+
+        On failing json request aborts and returns jsonified errors
+        """
+        if self.validate_on_submit(form):
+            form.populate_obj(object)
+            self.db.session.commit()
+
+            self.flash(self.get_success_message(), 'success')
+            return True
+        else:
+            self.flash(self.get_failure_message(), 'failure')
+            if request_wants_json():
+                response = jsonify(errors=form.errors)
+                response.status_code = 400
+                abort(response)
+            return False
+
+
+class FormView(BaseView, FormMixin):
+    def get_form(self, obj=None):
+        """
+        Returns the form associated with this view
+        """
+        params = get_request_params()
+        if not self.form_class:
+            raise Exception()
+        return self.form_class(params, obj=obj)
+
+    def get_success_redirect(self):
+        """
+        Returns the url to redirect to on successful request
+
+        TODO: make this support absolute urls also
+        """
+        return self.success_url
+
+    def get_success_message(self):
+        """
+        Returns the formatted success message (if any)
+        """
+        return self.success_message
+
+    def get_failure_message(self):
+        """
+        Returns the formatted failure message (if any)
+        """
+        return self.failure_message
+
+    def dispatch_request(self, *args, **kwargs):
+        item = self.get_object(**kwargs)
+        form = self.get_form(obj=item)
+        if self.save(form, item):
+            return redirect(url_for(self.get_success_redirect(), id=item.id))
+        return self.render_template(item=item, form=form)
+
+
+class ModelFormView(ModelView, FormMixin):
+    def get_form(self, obj=None):
+        """
+        Returns the form associated with this view if the form_class could
+        not be found FormView tries to build the form using model_form
+        function of wtforms sqlalchemy extension
+        """
+        params = get_request_params()
+        if self.form_class:
+            return self.form_class(params, obj=obj)
+        return model_form(self.model_class)(params, obj=obj)
+
+    def get_success_redirect(self):
+        """
+        Returns the url to redirect to on successful request
+
+        TODO: make this support absolute urls also
+        """
+        return self.success_url.format(
+            resource=underscore(self.model_class.__name__)
+        )
 
     def get_success_message(self):
         """
@@ -298,29 +366,6 @@ class FormView(ModelView):
             model=humanize(self.model_class.__name__)
         )
 
-    def save(self, form, object):
-        """
-        Validates request data and saves object, on success redirects to
-        success url and flashes success message (if any)
-
-        On failing json request aborts and returns jsonified errors
-        """
-        if request.method not in ['POST', 'PUT']:
-            return False
-        if form.validate():
-            form.populate_obj(object)
-            self.db.session.commit()
-
-            self.flash(self.get_success_message(), 'success')
-            return True
-        else:
-            self.flash(self.get_failure_message(), 'failure')
-            if request_wants_json():
-                response = jsonify(errors=form.errors)
-                response.status_code = 400
-                abort(response)
-            return False
-
     def dispatch_request(self, *args, **kwargs):
         item = self.get_object(**kwargs)
         form = self.get_form(obj=item)
@@ -329,7 +374,7 @@ class FormView(ModelView):
         return self.render_template(item=item, form=form)
 
 
-class CreateFormView(FormView):
+class CreateFormView(ModelFormView):
     """
     Generic create form view
 
@@ -349,7 +394,7 @@ class CreateFormView(FormView):
     """
     template = '{resource}/create.html'
     success_message = '{model} created!'
-    success_redirect = '{resource}.show'
+    success_url = '{resource}.show'
     methods = ['GET', 'POST']
 
     def get_object(self):
@@ -358,7 +403,7 @@ class CreateFormView(FormView):
         return object
 
 
-class UpdateFormView(FormView):
+class UpdateFormView(ModelFormView):
     """
     Generic update form view
 
@@ -378,11 +423,11 @@ class UpdateFormView(FormView):
     """
     template = '{resource}/edit.html'
     success_message = '{model} updated!'
-    success_redirect = '{resource}.show'
-    methods = ['GET', 'POST', 'PUT']
+    success_url = '{resource}.show'
+    methods = ['GET', 'POST', 'PUT', 'PATCH']
 
 
-class CreateView(FormView):
+class CreateView(ModelFormView):
     """
     Creates a model object
 
@@ -393,7 +438,7 @@ class CreateView(FormView):
     """
     methods = ['POST']
     success_message = '{model} created!'
-    success_redirect = '{resource}.show'
+    success_url = '{resource}.show'
 
     def get_object(self):
         object = self.model_class()
@@ -406,14 +451,14 @@ class CreateView(FormView):
         self.save(form, item)
 
         if request_wants_json():
-            response = jsonify(data=item.as_json())
+            response = self.jsonify(item)
             response.status_code = 201
             return response
         else:
             return redirect(url_for(self.get_success_redirect(), id=item.id))
 
 
-class UpdateView(FormView):
+class UpdateView(ModelFormView):
     """
     Updates a model object
 
@@ -422,9 +467,9 @@ class UpdateView(FormView):
 
     On json request returns the updated model object as json
     """
-    methods = ['PUT']
+    methods = ['PUT', 'PATCH']
     success_message = '{model} updated!'
-    success_redirect = '{resource}.show'
+    success_url = '{resource}.show'
 
     def dispatch_request(self, *args, **kwargs):
         item = self.get_object(**kwargs)
@@ -432,12 +477,12 @@ class UpdateView(FormView):
         self.save(form, item)
 
         if request_wants_json():
-            return jsonify(data=item.as_json())
+            return self.jsonify(item)
         else:
             return redirect(url_for(self.get_success_redirect(), id=item.id))
 
 
-class DeleteView(FormView):
+class DeleteView(ModelFormView):
     """
     Deletes a model object
 
@@ -448,7 +493,7 @@ class DeleteView(FormView):
     """
     methods = ['DELETE', 'POST']
     success_message = '{model} deleted.'
-    success_redirect = '{resource}.index'
+    success_url = '{resource}.index'
 
     def delete(self, item):
         """
