@@ -1,5 +1,4 @@
-import json
-from flask import Flask
+from flask import Flask, json
 from .extensions import db
 from werkzeug import cached_property
 
