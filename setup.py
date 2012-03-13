@@ -1,8 +1,18 @@
+import sys
 try:
     from setuptools import setup
 except ImportError:
     from distutils import setup
 
+install_requires = [
+    'Flask',
+    'Flask-SQLAlchemy',
+    'inflection>=0.1.2',
+    'WTForms'
+]
+
+if sys.version_info < (2, 6):
+    install_requires.append('simplejson')
 
 setup(
     name='Flask-GenericViews',
@@ -17,12 +27,7 @@ setup(
     license='BSD',
     zip_safe=False,
     platforms='any',
-    install_requires=[
-        'Flask',
-        'Flask-SQLAlchemy',
-        'inflection>=0.1.2',
-        'WTForms'
-    ],
+    install_requires=install_requires,
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
