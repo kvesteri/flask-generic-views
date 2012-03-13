@@ -194,7 +194,7 @@ class TemplateMixin(object):
 
 class ModelView(BaseView, ModelMixin, TemplateMixin):
     def get_template(self):
-        return TemplateMixin.get_template(self).format(
+        return TemplateMixin.get_template(self) % dict(
             resource=underscore(self.model_class.__name__),
         )
 
@@ -237,7 +237,7 @@ class ShowView(ModelView):
     template_object_name parameter, which is 'item' by default. If
     template_object_name is 'foo', this variable's name will be foo.
     """
-    template = '{resource}/show.html'
+    template = '%(resource)s/show.html'
 
     def dispatch_request(self, *args, **kwargs):
         item = self.get_object(**kwargs)
@@ -352,7 +352,7 @@ class ModelFormView(ModelView, FormMixin):
 
         TODO: make this support absolute urls also
         """
-        return self.success_url.format(
+        return self.success_url % dict(
             resource=underscore(self.model_class.__name__)
         )
 
@@ -360,7 +360,7 @@ class ModelFormView(ModelView, FormMixin):
         """
         Returns the formatted success message (if any)
         """
-        return self.success_message.format(
+        return self.success_message % dict(
             model=humanize(self.model_class.__name__)
         )
 
@@ -368,7 +368,7 @@ class ModelFormView(ModelView, FormMixin):
         """
         Returns the formatted failure message (if any)
         """
-        return self.failure_message.format(
+        return self.failure_message % dict(
             model=humanize(self.model_class.__name__)
         )
 
@@ -398,9 +398,9 @@ class CreateFormView(ModelFormView):
     form: A form instance representing the form for editing the object. This
     lets you refer to form fields easily in the template system.
     """
-    template = '{resource}/create.html'
-    success_message = '{model} created!'
-    success_url = '{resource}.show'
+    template = '%(resource)s/create.html'
+    success_message = '%(model)s created!'
+    success_url = '%(resource)s.show'
     methods = ['GET', 'POST']
 
     def get_object(self):
@@ -427,9 +427,9 @@ class UpdateFormView(ModelFormView):
     form: A form instance representing the form for editing the object. This
     lets you refer to form fields easily in the template system.
     """
-    template = '{resource}/edit.html'
-    success_message = '{model} updated!'
-    success_url = '{resource}.show'
+    template = '%(resource)s/edit.html'
+    success_message = '%(model)s updated!'
+    success_url = '%(resource)s.show'
     methods = ['GET', 'POST', 'PUT', 'PATCH']
 
 
@@ -443,8 +443,8 @@ class CreateView(ModelFormView):
     On json request returns the create model object as json
     """
     methods = ['POST']
-    success_message = '{model} created!'
-    success_url = '{resource}.show'
+    success_message = '%(model)s created!'
+    success_url = '%(resource)s.show'
 
     def get_object(self):
         object = self.model_class()
@@ -474,8 +474,8 @@ class UpdateView(ModelFormView):
     On json request returns the updated model object as json
     """
     methods = ['PUT', 'PATCH']
-    success_message = '{model} updated!'
-    success_url = '{resource}.show'
+    success_message = '%(model)s updated!'
+    success_url = '%(resource)s.show'
 
     def dispatch_request(self, *args, **kwargs):
         item = self.get_object(**kwargs)
@@ -498,8 +498,8 @@ class DeleteView(ModelFormView):
     On json request returns an empty response with status code 204
     """
     methods = ['DELETE', 'POST']
-    success_message = '{model} deleted.'
-    success_url = '{resource}.index'
+    success_message = '%(model)s deleted.'
+    success_url = '%(resource)s.index'
 
     def delete(self, item):
         """
@@ -537,7 +537,7 @@ class ListView(ModelView):
     :param query    the query to be used for fetching the items, by default
                     this is model.query (= all records for given model)
     """
-    template = '{resource}/index.html'
+    template = '%(resource)s/index.html'
 
     def __init__(self,
         query_field_names=None,
@@ -750,13 +750,13 @@ class ModelRouter(object):
             setattr(self, key, value)
 
         self.routes = {
-            'index': ['{prefix}', SortedListView, {}],
-            'create': ['{prefix}', CreateView, {}],
-            'edit': ['{prefix}/{primary_key}/edit', UpdateFormView, {}],
-            'new': ['{prefix}/new', CreateFormView, {}],
-            'update': ['{prefix}/{primary_key}', UpdateView, {}],
-            'delete': ['{prefix}/{primary_key}', DeleteView, {}],
-            'show': ['{prefix}/{primary_key}', ShowView, {}]
+            'index': ['%(prefix)s', SortedListView, {}],
+            'create': ['%(prefix)s', CreateView, {}],
+            'edit': ['%(prefix)s/%(primary_key)s/edit', UpdateFormView, {}],
+            'new': ['%(prefix)s/new', CreateFormView, {}],
+            'update': ['%(prefix)s/%(primary_key)s', UpdateView, {}],
+            'delete': ['%(prefix)s/%(primary_key)s', DeleteView, {}],
+            'show': ['%(prefix)s/%(primary_key)s', ShowView, {}]
         }
 
     def get_route_key(self):
@@ -782,7 +782,7 @@ class ModelRouter(object):
         """
         routes = copy(self.routes)
         for key in self.routes:
-            routes[key][0] = self.routes[key][0].format(
+            routes[key][0] = self.routes[key][0] % dict(
                 primary_key=self.get_route_key(),
                 prefix=self.route_prefix
             )
