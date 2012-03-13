@@ -1,5 +1,5 @@
-flask-generic-views
-===================
+Flask-GenericViews
+==================
 
 |build status|_
 
