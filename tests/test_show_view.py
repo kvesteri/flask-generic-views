@@ -1,3 +1,5 @@
+from __future__ import with_statement
+
 from flask.templating import TemplateNotFound
 from tests import ViewTestCase
 from .extensions import db
