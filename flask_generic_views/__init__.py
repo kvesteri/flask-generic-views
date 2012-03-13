@@ -31,6 +31,12 @@ from sqlalchemy import types
 from werkzeug.datastructures import MultiDict
 from wtforms.ext.sqlalchemy.orm import model_form
 
+try:
+    __version__ = __import__('pkg_resources')\
+        .get_distribution('flask_split').version
+except Exception:
+    __version__ = 'unknown'
+
 
 def qp_url_for(endpoint, **kwargs):
     """
