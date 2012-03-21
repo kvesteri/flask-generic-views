@@ -1,18 +1,19 @@
 from __future__ import with_statement
 
 from flask.templating import TemplateNotFound
-from tests import ViewTestCase
+from flask.ext.generic_views import ShowView
+from pytest import raises
+
+from . import ViewTestCase
 from .extensions import db
 from .models import User
-from .views import ShowUserView
-from pytest import raises
 
 
 class TestShowView(ViewTestCase):
     def setup_method(self, method):
         ViewTestCase.setup_method(self, method)
         self.app.add_url_rule('/users/<int:id>',
-            view_func=ShowUserView.as_view('show', model_class=User),
+            view_func=ShowView.as_view('show', model_class=User),
         )
 
         user = User(name=u'John Matrix')
@@ -25,7 +26,7 @@ class TestShowView(ViewTestCase):
 
     def test_raises_template_not_found_for_invalid_template(self):
         self.app.add_url_rule('/users/<int:id>',
-            view_func=ShowUserView.as_view(
+            view_func=ShowView.as_view(
                 'show',
                 model_class=User,
                 template='invalid.html'
