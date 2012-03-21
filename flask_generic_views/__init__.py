@@ -33,7 +33,7 @@ from .core import BaseView
 
 try:
     __version__ = __import__('pkg_resources')\
-        .get_distribution('flask_split').version
+        .get_distribution('flask_generic_views').version
 except Exception:
     __version__ = 'unknown'
 
