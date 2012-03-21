@@ -4,21 +4,19 @@ from flask.templating import TemplateNotFound
 from flask.ext.generic_views import ShowView
 from pytest import raises
 
-from . import ViewTestCase
-from .extensions import db
-from .models import User
+from . import TestCase
 
 
-class TestShowView(ViewTestCase):
+class TestShowView(TestCase):
     def setup_method(self, method):
-        ViewTestCase.setup_method(self, method)
+        TestCase.setup_method(self, method)
         self.app.add_url_rule('/users/<int:id>',
-            view_func=ShowView.as_view('show', model_class=User),
+            view_func=ShowView.as_view('show', model_class=self.User),
         )
 
-        user = User(name=u'John Matrix')
-        db.session.add(user)
-        db.session.commit()
+        user = self.User(name=u'John Matrix')
+        self.db.session.add(user)
+        self.db.session.commit()
 
     def test_if_template_not_set_tries_to_use_default_template(self):
         response = self.client.get('/users/1')
@@ -28,7 +26,7 @@ class TestShowView(ViewTestCase):
         self.app.add_url_rule('/users/<int:id>',
             view_func=ShowView.as_view(
                 'show',
-                model_class=User,
+                model_class=self.User,
                 template='invalid.html'
             ),
         )

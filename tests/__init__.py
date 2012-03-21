@@ -1,40 +1,27 @@
 from flask import Flask
-from .extensions import db
+from flask.ext.sqlalchemy import SQLAlchemy
 
 
-class DatabaseTestCase(object):
-    datasets = []
-
-    def create_app(self):
-        app = Flask(__name__)
-        app.config.from_object('tests.config')
-        db.init_app(app)
-        return app
+class TestCase(object):
 
     def setup_method(self, method):
-        self.app = self.create_app()
-        self._ctx = self.app.test_request_context()
-        self._ctx.push()
+        self.app = Flask(__name__)
+        self.app.debug = True
+        self.app.secret_key = 'not a secret'
 
-        db.create_all()
+        db = SQLAlchemy(self.app)
 
-    def teardown_method(self, method):
-        db.drop_all()
-        db.session.remove()
+        class User(db.Model):
+            id = db.Column(db.Integer, autoincrement=True, primary_key=True)
+            name = db.Column(db.Unicode(255), index=True)
+            age = db.Column(db.Integer, index=True)
 
-        #self._ctx.pop()
-        # Clean up to prevent memory leaks
-        del self.app.extensions['sqlalchemy']
-        del self.app
-        del self._ctx
+        self.User = User
+        self.db = db
+        self.db.create_all()
 
-
-class ViewTestCase(DatabaseTestCase):
-
-    def setup_method(self, method):
-        super(ViewTestCase, self).setup_method(method)
         self.client = self.app.test_client()
 
     def teardown_method(self, method):
-        del self.client
-        super(ViewTestCase, self).teardown_method(method)
+        self.db.drop_all()
+        self.db.session.remove()

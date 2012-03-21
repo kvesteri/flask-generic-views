@@ -1,8 +1,7 @@
-from tests import ViewTestCase
-from flask import abort, current_app
-from .extensions import db
-from .models import User
 from flask_generic_views import ModelRouter
+from flask import abort, current_app
+
+from . import TestCase
 
 
 def simple_decorator(f):
@@ -12,19 +11,19 @@ def simple_decorator(f):
     return decorator
 
 
-class TestModelRouter(ViewTestCase):
+class TestModelRouter(TestCase):
     def setup_method(self, method):
-        ViewTestCase.setup_method(self, method)
+        TestCase.setup_method(self, method)
 
-        user = User(name=u'John Matrix')
-        db.session.add(user)
-        db.session.commit()
+        user = self.User(name=u'John Matrix')
+        self.db.session.add(user)
+        self.db.session.commit()
 
     def test_decorator_assignment(self):
-        router = ModelRouter(User)
+        router = ModelRouter(self.User)
         router.decorators = [simple_decorator]
         blueprint = router.register()
-        current_app.register_blueprint(blueprint, url_prefix='/users')
+        self.app.register_blueprint(blueprint, url_prefix='/users')
 
         response = self.client.get('/users/1')
 

@@ -1,20 +1,20 @@
-from tests import ViewTestCase
-from .models import User
+from tests import TestCase
 from .mocks import MockForm
 from flask_generic_views import CreateFormView, ShowView
 
 
-class TestCreateFormView(ViewTestCase):
+class TestCreateFormView(TestCase):
     def setup_method(self, method):
-        ViewTestCase.setup_method(self, method)
+        TestCase.setup_method(self, method)
 
         self.app.add_url_rule('/users/new',
             view_func=CreateFormView.as_view('edit',
-            model_class=User,
-            form_class=MockForm),
+                model_class=self.User,
+                form_class=MockForm
+            )
         )
         self.app.add_url_rule('/users/<int:id>',
-            view_func=ShowView.as_view('user.show', model_class=User)
+            view_func=ShowView.as_view('user.show', model_class=self.User)
         )
 
     def test_renders_template_on_get_request(self):
@@ -33,4 +33,4 @@ class TestCreateFormView(ViewTestCase):
         self.client.post('/users/new',
             data={'name': u'Jack Daniels'}
         )
-        assert User.query.first().name == u'Jack Daniels'
+        assert self.User.query.first().name == u'Jack Daniels'

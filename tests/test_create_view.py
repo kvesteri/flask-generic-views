@@ -1,18 +1,18 @@
-from tests import ViewTestCase
-from .models import User
 from flask_generic_views import CreateView, ShowView
 
+from . import TestCase
 
-class TestCreateView(ViewTestCase):
+
+class TestCreateView(TestCase):
     def setup_method(self, method):
-        ViewTestCase.setup_method(self, method)
+        TestCase.setup_method(self, method)
 
         self.app.add_url_rule('/users',
             view_func=CreateView.as_view('create',
-            model_class=User),
+            model_class=self.User),
         )
         self.app.add_url_rule('/users/<int:id>',
-            view_func=ShowView.as_view('user.show', model_class=User)
+            view_func=ShowView.as_view('user.show', model_class=self.User)
         )
 
     def test_html_requests_redirect_on_success(self):
