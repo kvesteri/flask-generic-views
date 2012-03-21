@@ -1,3 +1,5 @@
+from __future__ import with_statement
+
 from flask.views import MethodView
 from flask.ext.generic_views import (
     BaseView,
