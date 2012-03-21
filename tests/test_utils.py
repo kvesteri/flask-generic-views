@@ -1,7 +1,7 @@
 from tests import ViewTestCase
 from .extensions import db
 from .models import User
-from flask_generic_views import UpdateView, SortedListView, qp_url_for
+from flask_generic_views import UpdateView, SortedListView
 
 
 class TestUtils(ViewTestCase):
@@ -19,6 +19,3 @@ class TestUtils(ViewTestCase):
         user = User(name=u'John Matrix')
         db.session.add(user)
         db.session.commit()
-
-    def test_qp_url_for(self):
-        assert str(qp_url_for('user.index', id=3)) == '/users?id=3'

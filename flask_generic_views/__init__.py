@@ -38,22 +38,6 @@ except Exception:
     __version__ = 'unknown'
 
 
-def qp_url_for(endpoint, **kwargs):
-    """
-    Returns the url for an endpoint but preserves all request query parameters
-
-    kwargs can be used for overriding specific query parameters
-
-    :param endpoint: endpoint to return the url for, eg. user.index
-    :param kwargs: dict containing query parameter names as keys
-    """
-    data = dict(MultiDict(request.args).lists())
-
-    for key, value in kwargs.items():
-        data[key] = value
-    return url_for(endpoint, **data)
-
-
 TYPE_MAP = {
     types.BigInteger: int,
     types.SmallInteger: int,
