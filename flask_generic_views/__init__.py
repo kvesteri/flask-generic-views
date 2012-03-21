@@ -447,15 +447,6 @@ class DeleteView(ModelFormView):
         return redirect(url_for(self.get_success_redirect()))
 
 
-class SoftDeleteView(DeleteView):
-    """
-    Same as delete view except objects are not actually deleted -> they are
-    marked as deleted.
-    """
-    def delete(self, item):
-        item.deleted_at = datetime.now()
-
-
 class ListView(ModelView):
     """
     Views several items as a list
