@@ -29,7 +29,8 @@ from inflection import underscore, humanize
 from sqlalchemy import types
 from wtforms.ext.sqlalchemy.orm import model_form
 
-from .core import BaseView
+from .core import BaseView, TemplateView
+from .exceptions import ImproperlyConfigured
 
 try:
     __version__ = __import__('pkg_resources')\
