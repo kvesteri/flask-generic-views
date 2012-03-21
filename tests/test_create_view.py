@@ -15,20 +15,6 @@ class TestCreateView(ViewTestCase):
             view_func=ShowView.as_view('user.show', model_class=User)
         )
 
-    def test_supports_json(self):
-        response = self.xhr_client.post('/users',
-            data={'name': 'Jack Daniels'}
-        )
-        assert response.status_code == 201
-        assert User.query.first().name == u'Jack Daniels'
-
-    def test_failing_json_request(self):
-        response = self.xhr_client.post('/users',
-            data={'age': 'Invalid'}
-        )
-        assert 'errors' in response.json
-        assert response.status_code == 400
-
     def test_html_requests_redirect_on_success(self):
         response = self.client.post('/users',
             data={'name': u'Jack Daniels'}

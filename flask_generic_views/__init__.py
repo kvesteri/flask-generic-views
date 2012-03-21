@@ -24,11 +24,10 @@ from copy import copy
 from datetime import datetime, date, time
 from decimal import Decimal
 from flask import (render_template, request, redirect, url_for, flash,
-    current_app, jsonify, Response, Blueprint, abort)
+    current_app, jsonify, Blueprint)
 from flask.views import View
 from inflection import underscore, humanize
 from sqlalchemy import types
-from werkzeug.datastructures import MultiDict
 from wtforms.ext.sqlalchemy.orm import model_form
 
 try:
@@ -54,17 +53,6 @@ TYPE_MAP = {
 }
 
 
-def request_wants_json():
-    """
-    Whether or not the request wants the response in json format
-    """
-    best = request.accept_mimetypes \
-        .best_match(['application/json', 'text/html'])
-    return best == 'application/json' and \
-        request.accept_mimetypes[best] > \
-        request.accept_mimetypes['text/html']
-
-
 def get_native_type(sqlalchemy_type):
     """
     Converts sqlalchemy type to python type, is smart enough to understand
@@ -77,31 +65,10 @@ def get_native_type(sqlalchemy_type):
     return None
 
 
-def get_request_params():
-    if request.is_xhr:
-        if request.json:
-            return MultiDict(request.json)
-        else:
-            return MultiDict({})
-    else:
-        return request.form
-
-
 class BaseView(View):
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
             setattr(self, key, value)
-
-    @property
-    def request_params(self):
-        if request.is_xhr:
-            data = {}
-            if request.data:
-                data = request.json
-        else:
-            data = request.form.to_dict()
-
-        return data
 
 
 class ModelMixin(object):
@@ -225,10 +192,7 @@ class ShowView(ModelView):
 
     def dispatch_request(self, *args, **kwargs):
         item = self.get_object(**kwargs)
-        if request_wants_json():
-            return self.jsonify(item)
-        else:
-            return self.render_template(item=item)
+        return self.render_template(item=item)
 
 
 class FormMixin(object):
@@ -273,10 +237,6 @@ class FormMixin(object):
             return True
         else:
             self.flash(self.get_failure_message(), 'failure')
-            if request_wants_json():
-                response = jsonify(errors=form.errors)
-                response.status_code = 400
-                abort(response)
             return False
 
 
@@ -285,10 +245,9 @@ class FormView(BaseView, FormMixin):
         """
         Returns the form associated with this view
         """
-        params = get_request_params()
         if not self.form_class:
             raise Exception()
-        return self.form_class(params, obj=obj)
+        return self.form_class(request.form, obj=obj)
 
     def get_success_redirect(self):
         """
@@ -325,10 +284,9 @@ class ModelFormView(ModelView, FormMixin):
         not be found FormView tries to build the form using model_form
         function of wtforms sqlalchemy extension
         """
-        params = get_request_params()
         if self.form_class:
-            return self.form_class(params, obj=obj)
-        return model_form(self.model_class)(params, obj=obj)
+            return self.form_class(request.form, obj=obj)
+        return model_form(self.model_class)(request.form, obj=obj)
 
     def get_success_redirect(self):
         """
@@ -440,12 +398,7 @@ class CreateView(ModelFormView):
         form = self.get_form(obj=item)
         self.save(form, item)
 
-        if request_wants_json():
-            response = self.jsonify(item)
-            response.status_code = 201
-            return response
-        else:
-            return redirect(url_for(self.get_success_redirect(), id=item.id))
+        return redirect(url_for(self.get_success_redirect(), id=item.id))
 
 
 class UpdateView(ModelFormView):
@@ -466,10 +419,7 @@ class UpdateView(ModelFormView):
         form = self.get_form(obj=item)
         self.save(form, item)
 
-        if request_wants_json():
-            return self.jsonify(item)
-        else:
-            return redirect(url_for(self.get_success_redirect(), id=item.id))
+        return redirect(url_for(self.get_success_redirect(), id=item.id))
 
 
 class DeleteView(ModelFormView):
@@ -498,11 +448,8 @@ class DeleteView(ModelFormView):
         self.delete(item)
         self.db.session.commit()
 
-        if request_wants_json():
-            return Response(status=204)
-        else:
-            self.flash(self.get_success_message(), 'success')
-            return redirect(url_for(self.get_success_redirect()))
+        self.flash(self.get_success_message(), 'success')
+        return redirect(url_for(self.get_success_redirect()))
 
 
 class SoftDeleteView(DeleteView):
@@ -661,28 +608,16 @@ class SortedListView(ListView, SortMixin, PaginationMixin, SearchMixin):
         if self.form_class:
             form = self.form_class()
 
-        if request_wants_json():
-            return jsonify(
-                pagination={
-                    'page': pagination.page,
-                    'pages': pagination.pages,
-                    'per_page': pagination.per_page,
-                    'total': pagination.total
-                    },
-                sort=self.sort,
-                data=[item.as_json() for item in items]
-            )
-        else:
-            return self.render_template(
-                items=items,
-                columns=self.columns,
-                sort=self.sort,
-                per_page=pagination.per_page,
-                page=pagination.page,
-                total_items=pagination.total,
-                pages=pagination.pages,
-                form=form
-            )
+        return self.render_template(
+            items=items,
+            columns=self.columns,
+            sort=self.sort,
+            per_page=pagination.per_page,
+            page=pagination.page,
+            total_items=pagination.total,
+            pages=pagination.pages,
+            form=form
+        )
 
 
 class ModelRouter(object):

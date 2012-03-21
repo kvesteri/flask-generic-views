@@ -20,23 +20,9 @@ class TestUpdateView(ViewTestCase):
         db.session.add(user)
         db.session.commit()
 
-    def test_supports_json(self):
-        response = self.xhr_client.put('/users/1',
-            data={'name': 'Jack Daniels'}
-        )
-        assert response.status_code == 200
-        assert response.json['data']['name'] == u'Jack Daniels'
-
     def test_returns_404_if_not_found(self):
-        response = self.xhr_client.put('/users/123123')
+        response = self.client.put('/users/123123')
         assert response.status_code == 404
-
-    def test_failing_json_request(self):
-        response = self.xhr_client.put('/users/1',
-            data={'age': 'Invalid'}
-        )
-        assert 'errors' in response.json
-        assert response.status_code == 400
 
     def test_html_requests_redirect_on_success(self):
         response = self.client.put('/users/1',
