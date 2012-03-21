@@ -24,7 +24,7 @@ from copy import copy
 from datetime import datetime, date, time
 from decimal import Decimal
 from flask import (render_template, request, redirect, url_for, flash,
-    current_app, jsonify, Blueprint)
+    current_app, Blueprint)
 from inflection import underscore, humanize
 from sqlalchemy import types
 from wtforms.ext.sqlalchemy.orm import model_form
@@ -101,9 +101,6 @@ class ModelMixin(object):
         pk = kwargs[self.pk_param]
         return self.get_query().get_or_404(pk)
 
-    def jsonify(self, item):
-        return jsonify(data=item.as_json())
-
 
 class TemplateMixin(object):
     """
@@ -150,8 +147,6 @@ class ShowView(ModelView):
     Generic show view
 
     On text/html request returns html template with requested object
-
-    On json request returns requested object in json format
 
     Example ::
 
@@ -221,8 +216,6 @@ class FormMixin(object):
         """
         Validates request data and saves object, on success redirects to
         success url and flashes success message (if any)
-
-        On failing json request aborts and returns jsonified errors
         """
         if self.validate_on_submit(form):
             form.populate_obj(object)
@@ -376,8 +369,6 @@ class CreateView(ModelFormView):
 
     By default on html request redirects to resource.show and creates a
     simple success message
-
-    On json request returns the create model object as json
     """
     methods = ['POST']
     success_message = '%(model)s created!'
@@ -402,8 +393,6 @@ class UpdateView(ModelFormView):
 
     By default on html request redirects to resource.show and creates a
     simple success message
-
-    On json request returns the updated model object as json
     """
     methods = ['PUT', 'PATCH']
     success_message = '%(model)s updated!'
@@ -423,8 +412,6 @@ class DeleteView(ModelFormView):
 
     By default on html request redirects to resource.index and creates a
     simple success message
-
-    On json request returns an empty response with status code 204
     """
     methods = ['DELETE', 'POST']
     success_message = '%(model)s deleted.'
