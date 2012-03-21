@@ -25,10 +25,11 @@ from datetime import datetime, date, time
 from decimal import Decimal
 from flask import (render_template, request, redirect, url_for, flash,
     current_app, jsonify, Blueprint)
-from flask.views import View
 from inflection import underscore, humanize
 from sqlalchemy import types
 from wtforms.ext.sqlalchemy.orm import model_form
+
+from .core import BaseView
 
 try:
     __version__ = __import__('pkg_resources')\
@@ -63,12 +64,6 @@ def get_native_type(sqlalchemy_type):
             return TYPE_MAP[base_type]
             break
     return None
-
-
-class BaseView(View):
-    def __init__(self, **kwargs):
-        for key, value in kwargs.items():
-            setattr(self, key, value)
 
 
 class ModelMixin(object):
