@@ -19,6 +19,16 @@ class TestBaseView(object):
         view = BaseView(foo='bar')
         assert view.foo == 'bar'
 
+    def test_saves_arguments_and_keywords_arguments_to_the_instance(self):
+        (flexmock(MethodView)
+            .should_receive('dispatch_request')
+            .with_args('foo', bar='xyzzy')
+            .and_return('dispatch_request'))
+        view = BaseView()
+        view.dispatch_request('foo', bar='xyzzy')
+        assert view.args == ('foo',)
+        assert view.kwargs == {'bar': 'xyzzy'}
+
 
 class TestTemplateView(object):
     def test_responds_to_get_requests(self):

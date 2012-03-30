@@ -17,6 +17,11 @@ class BaseView(MethodView):
         for key, value in kwargs.iteritems():
             setattr(self, key, value)
 
+    def dispatch_request(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+        return super(BaseView, self).dispatch_request(*args, **kwargs)
+
 
 class TemplateView(BaseView):
     """Render a given template."""
