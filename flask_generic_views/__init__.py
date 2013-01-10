@@ -275,7 +275,7 @@ class ModelFormView(ModelView, FormMixin):
         """
         if self.form_class:
             return self.form_class(request.form, obj=obj)
-        return model_form(self.model_class)(request.form, obj=obj)
+        return model_form(self.model_class, db_session=self.db.session)(request.form, obj=obj)
 
     def get_success_redirect(self):
         """
