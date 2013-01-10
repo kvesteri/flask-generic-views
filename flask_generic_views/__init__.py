@@ -208,7 +208,7 @@ class FormMixin(object):
             flash(message, *args, **kwargs)
 
     def is_submitted(self):
-        return request.method in set(self.methods).difference('GET')
+        return request.method in set(self.methods).difference(['GET'])
 
     def validate_on_submit(self, form):
         return self.is_submitted() and form.validate()
