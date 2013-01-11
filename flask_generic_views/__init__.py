@@ -275,7 +275,9 @@ class ModelFormView(ModelView, FormMixin):
         """
         if self.form_class:
             return self.form_class(request.form, obj=obj)
-        return model_form(self.model_class, db_session=self.db.session)(request.form, obj=obj)
+        return model_form(self.model_class, db_session=self.db.session)(
+            request.form, obj=obj
+        )
 
     def get_success_redirect(self):
         """
@@ -648,7 +650,7 @@ class ModelRouter(object):
             'edit': ['%(prefix)s/%(primary_key)s/edit', UpdateFormView, {}],
             'new': ['%(prefix)s/new', CreateFormView, {}],
             'update': ['%(prefix)s/%(primary_key)s', UpdateView, {}],
-            'delete': ['%(prefix)s/%(primary_key)s', DeleteView, {}],
+            'delete': ['%(prefix)s/%(primary_key)s/delete', DeleteView, {}],
             'show': ['%(prefix)s/%(primary_key)s', ShowView, {}]
         }
 
@@ -726,8 +728,10 @@ class ModelRouter(object):
 
     def register(self, blueprint=None):
         if not blueprint:
-            blueprint = Blueprint(underscore(self.model_class.__name__),
-                __name__)
+            blueprint = Blueprint(
+                underscore(self.model_class.__name__),
+                __name__
+            )
 
         for key, value in self.get_routes().items():
             route, view, kwargs = value
